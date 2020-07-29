@@ -1,0 +1,33 @@
+[package]
+name = "zeebe"
+version = "0.1.0"
+authors = ["Julian Tescher <julian@outtherelabs.com>"]
+description = """
+A rust client for defining, orchestrating, and monitoring business processes across microservices 
+using Zeebe.
+"""
+homepage = "https://github.com/OutThereLabs/zeebe-rust"
+repository = "https://github.com/OutThereLabs/zeebe-rust"
+readme = "README.md"
+categories = ["asynchronous"]
+keywords = ["zeebe", "job", "queue", "async", "microservices"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]
+futures = "0.3"
+prost = "0.6"
+serde = "1.0"
+serde_json = "1.0"
+tonic = { version = "0.3", features = ["tls", "transport"] }
+tokio = { version = "0.2", features = ["fs", "time", "stream"] }
+thiserror = "1.0"
+tracing = "0.1"
+tracing-futures = "0.2"
+
+[dev-dependencies]
+tokio = { version = "0.2", features = ["macros"] }
+tracing-subscriber = "0.2"
+
+[build-dependencies]
+tonic-build = "0.3"
