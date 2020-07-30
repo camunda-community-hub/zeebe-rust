@@ -454,9 +454,19 @@ impl CreateWorkflowInstanceWithResultResponse {
         self.0.workflow_instance_key
     }
 
-    /// JSON document consists of visible variables in the root scope
-    pub fn variables(&self) -> &str {
+    /// Serialized JSON document that consists of visible variables in the root scope
+    pub fn variables_str(&self) -> &str {
         &self.0.variables
+    }
+
+    /// JSON document consists of visible variables in the root scope
+    pub fn variables(&self) -> serde_json::Value {
+        serde_json::from_str(&self.0.variables).unwrap_or_else(|_| serde_json::json!({}))
+    }
+
+    /// Deserialize encoded json variables as a given type
+    pub fn variables_as<'a, T: serde::de::Deserialize<'a>>(&'a self) -> Option<T> {
+        serde_json::from_str::<'a, T>(&self.0.variables).ok()
     }
 }
 

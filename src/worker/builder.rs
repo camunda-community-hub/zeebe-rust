@@ -1,7 +1,8 @@
 use crate::client::Client;
 use crate::error::{Error, Result};
+use crate::job::Job;
 use crate::proto;
-use crate::worker::{job_dispatcher, Job, JobPoller, PollMessage};
+use crate::worker::{job_dispatcher, JobPoller, PollMessage};
 use futures::future::BoxFuture;
 use futures::{FutureExt, StreamExt};
 use serde::Serialize;
@@ -133,31 +134,92 @@ impl JobWorkerBuilder {
 
     /// Set a handler function that completes or fails the job based on the result
     /// rather than having to explicitly use the client to report job status.
-    pub fn with_auto_handler<F, R, E, T>(self, handler: F) -> Self
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use serde::{Deserialize, Serialize};
+    /// use thiserror::Error;
+    /// use zeebe::Client;
+    /// use futures::future;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = Client::new();
+    ///
+    /// // Given an app-specific error
+    /// #[derive(Error, Debug)]
+    /// enum MyError {
+    ///     #[error("unknown error occurred")]
+    ///     Unknown,
+    /// }
+    ///
+    /// // And app-specific job data
+    /// #[derive(Deserialize)]
+    /// struct MyJobData {
+    ///     my_property: String,
+    ///     my_other_property: String,
+    /// }
+    ///
+    /// // And app-specific job result
+    /// #[derive(Serialize)]
+    /// struct MyJobResult {
+    ///     result: u32,
+    /// }
+    ///
+    /// let job = client
+    ///     .job_worker()
+    ///     .with_job_type("my-job-type")
+    ///     .with_auto_handler(move |_client: Client, my_job_data: MyJobData| {
+    ///         future::ok::<_, MyError>(MyJobResult { result: 42 })
+    ///     })
+    ///     .spawn()
+    ///     .await?;
+    ///
+    /// # Ok(())
+    /// # }
+    ///
+    /// ```
+    pub fn with_auto_handler<F, R, E, T, J>(self, handler: F) -> Self
     where
-        F: Fn(Client, Job) -> R + Send + Sync + 'static,
+        F: Fn(Client, J) -> R + Send + Sync + 'static,
         R: Future<Output = std::result::Result<T, E>> + Send + 'static,
         E: std::error::Error,
         T: Serialize,
+        J: serde::de::DeserializeOwned,
     {
         self.with_handler(move |client, job| {
             let job_key = job.key();
-            handler(client.clone(), job).then(move |result| match result {
-                Ok(variables) => client
-                    .complete_job()
-                    .with_job_key(job_key)
-                    .with_variables(json!(variables))
-                    .send()
-                    .map(|_| ())
+            match serde_json::from_str(job.variables_str()) {
+                Ok(typed_job) => handler(client.clone(), typed_job)
+                    .then(move |result| match result {
+                        Ok(variables) => client
+                            .complete_job()
+                            .with_job_key(job_key)
+                            .with_variables(json!(variables))
+                            .send()
+                            .map(|_| ())
+                            .left_future(),
+                        Err(err) => client
+                            .fail_job()
+                            .with_job_key(job_key)
+                            .with_error_message(err.to_string())
+                            .send()
+                            .map(|_| ())
+                            .right_future(),
+                    })
                     .left_future(),
                 Err(err) => client
                     .fail_job()
                     .with_job_key(job_key)
-                    .with_error_message(err.to_string())
+                    .with_error_message(format!(
+                        "variables do not deserialize to expected type: {:?}",
+                        err
+                    ))
                     .send()
                     .map(|_| ())
                     .right_future(),
-            })
+            }
         })
     }
 

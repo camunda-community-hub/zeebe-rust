@@ -1,6 +1,96 @@
 use crate::{client::Client, proto, Error, Result};
 use tracing::debug;
 
+/// An activate Zeebe job that is ready to be worked on by a worker.
+#[derive(Clone, Debug)]
+pub struct Job(proto::ActivatedJob);
+
+impl Job {
+    /// Create a new job from a GRPC response
+    pub(crate) fn new(proto: proto::ActivatedJob) -> Self {
+        Job(proto)
+    }
+
+    /// the key, a unique identifier for the job
+    pub fn key(&self) -> i64 {
+        self.0.key
+    }
+
+    /// the type of the job (should match what was requested)
+    pub fn job_type(&self) -> &str {
+        &self.0.r#type
+    }
+
+    /// the job's workflow instance key
+    pub fn workflow_instance_key(&self) -> i64 {
+        self.0.workflow_instance_key
+    }
+
+    /// the bpmn process ID of the job workflow definition
+    pub fn bpmn_process_id(&self) -> &str {
+        &self.0.bpmn_process_id
+    }
+
+    /// the version of the job workflow definition
+    pub fn workflow_definition_version(&self) -> i32 {
+        self.0.workflow_definition_version
+    }
+
+    /// the key of the job workflow definition
+    pub fn workflow_key(&self) -> i64 {
+        self.0.workflow_key
+    }
+
+    /// the associated task element ID
+    pub fn element_id(&self) -> &str {
+        &self.0.element_id
+    }
+
+    /// the unique key identifying the associated task, unique within the scope of
+    /// the workflow instance
+    pub fn element_instance_key(&self) -> i64 {
+        self.0.element_instance_key
+    }
+
+    /// a set of custom headers defined during modelling; returned as a serialized
+    /// JSON document
+    pub fn custom_headers(&self) -> &str {
+        &self.0.custom_headers
+    }
+
+    /// the name of the worker which activated this job
+    pub fn worker(&self) -> &str {
+        &self.0.worker
+    }
+
+    /// the amount of retries left to this job (should always be positive)
+    pub fn retries(&self) -> i32 {
+        self.0.retries
+    }
+
+    /// when the job can be activated again, sent as a UNIX epoch timestamp
+    pub fn deadline(&self) -> i64 {
+        self.0.deadline
+    }
+
+    /// Serialized JSON document, computed at activation time, consisting of all
+    /// visible variables to the task scope
+    pub fn variables_str(&self) -> &str {
+        &self.0.variables
+    }
+
+    /// JSON document, computed at activation time, consisting of all visible
+    /// variables to the task scope
+    pub fn variables(&self) -> serde_json::Value {
+        serde_json::from_str(&self.0.variables).unwrap_or_else(|_| serde_json::json!({}))
+    }
+
+    /// Deserialize encoded json variables as a given type
+    pub fn variables_as<'a, T: serde::de::Deserialize<'a>>(&'a self) -> Option<T> {
+        serde_json::from_str::<'a, T>(&self.0.variables).ok()
+    }
+}
+
 /// Configuration to complete a job
 #[derive(Debug)]
 pub struct CompleteJobBuilder {

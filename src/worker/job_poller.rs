@@ -1,4 +1,4 @@
-use crate::{client::Client, proto};
+use crate::{client::Client, job::Job, proto};
 use futures::{
     future::{FutureExt, TryFutureExt},
     stream::{BoxStream, StreamExt},
@@ -36,80 +36,6 @@ pub(crate) enum PollMessage {
     JobFinished,
 }
 
-/// An activate Zeebe job that is ready to be worked on by a worker.
-#[derive(Clone, Debug)]
-pub struct Job(proto::ActivatedJob);
-
-impl Job {
-    /// the key, a unique identifier for the job
-    pub fn key(&self) -> i64 {
-        self.0.key
-    }
-
-    /// the type of the job (should match what was requested)
-    pub fn job_type(&self) -> &str {
-        &self.0.r#type
-    }
-
-    /// the job's workflow instance key
-    pub fn workflow_instance_key(&self) -> i64 {
-        self.0.workflow_instance_key
-    }
-
-    /// the bpmn process ID of the job workflow definition
-    pub fn bpmn_process_id(&self) -> &str {
-        &self.0.bpmn_process_id
-    }
-
-    /// the version of the job workflow definition
-    pub fn workflow_definition_version(&self) -> i32 {
-        self.0.workflow_definition_version
-    }
-
-    /// the key of the job workflow definition
-    pub fn workflow_key(&self) -> i64 {
-        self.0.workflow_key
-    }
-
-    /// the associated task element ID
-    pub fn element_id(&self) -> &str {
-        &self.0.element_id
-    }
-
-    /// the unique key identifying the associated task, unique within the scope of
-    /// the workflow instance
-    pub fn element_instance_key(&self) -> i64 {
-        self.0.element_instance_key
-    }
-
-    /// a set of custom headers defined during modelling; returned as a serialized
-    /// JSON document
-    pub fn custom_headers(&self) -> &str {
-        &self.0.custom_headers
-    }
-
-    /// the name of the worker which activated this job
-    pub fn worker(&self) -> &str {
-        &self.0.worker
-    }
-
-    /// the amount of retries left to this job (should always be positive)
-    pub fn retries(&self) -> i32 {
-        self.0.retries
-    }
-
-    /// when the job can be activated again, sent as a UNIX epoch timestamp
-    pub fn deadline(&self) -> i64 {
-        self.0.deadline
-    }
-
-    /// JSON document, computed at activation time, consisting of all visible
-    /// variables to the task scope
-    pub fn variables(&self) -> &str {
-        &self.0.variables
-    }
-}
-
 impl JobPoller {
     fn should_activate_jobs(&self) -> bool {
         self.remaining <= self.threshold && !self.request_in_progress
@@ -142,7 +68,7 @@ impl JobPoller {
                         total_jobs += batch.jobs.len() as u32;
                         for job in batch.jobs {
                             let _ = job_queue
-                                .send(Job(job))
+                                .send(Job::new(job))
                                 .inspect_err(|err| {
                                     tracing::error!(?worker, ?err, "job queue send failed");
                                 })

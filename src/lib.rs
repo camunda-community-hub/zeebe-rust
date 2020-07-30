@@ -93,14 +93,14 @@ pub(crate) mod proto {
 pub use client::{Client, ClientConfig};
 pub use error::{Error, Result};
 pub use job::{
-    CompleteJobBuilder, CompleteJobResponse, FailJobBuilder, FailJobResponse, ThrowErrorBuilder,
-    ThrowErrorResponse, UpdateJobRetriesBuilder, UpdateJobRetriesResponse,
+    CompleteJobBuilder, CompleteJobResponse, FailJobBuilder, FailJobResponse, Job,
+    ThrowErrorBuilder, ThrowErrorResponse, UpdateJobRetriesBuilder, UpdateJobRetriesResponse,
 };
 pub use topology::{BrokerInfo, Partition, TopologyBuilder, TopologyResponse};
 pub use util::{
     PublishMessageBuilder, PublishMessageResponse, ResolveIncidentBuilder, ResolveIncidentResponse,
 };
-pub use worker::{Job, JobWorkerBuilder};
+pub use worker::JobWorkerBuilder;
 pub use workflow::{
     CancelWorkflowInstanceBuilder, CancelWorkflowInstanceResponse, CreateWorkflowInstanceBuilder,
     CreateWorkflowInstanceResponse, CreateWorkflowInstanceWithResultBuilder,

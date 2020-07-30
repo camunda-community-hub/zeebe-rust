@@ -1,6 +1,7 @@
 use crate::{
     client::Client,
-    worker::{builder::JobHandler, Job, PollMessage},
+    job::Job,
+    worker::{builder::JobHandler, PollMessage},
 };
 use futures::StreamExt;
 use std::sync::Arc;
