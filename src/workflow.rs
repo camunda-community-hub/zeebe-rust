@@ -355,9 +355,9 @@ impl<'a> CreateWorkflowInstanceWithResultBuilder<'a> {
     }
 
     /// Set variables for this workflow instance.
-    pub fn with_fetch_variables<T: IntoIterator<Item = String>>(self, variables: T) -> Self {
+    pub fn with_fetch_variables(self, fetch_variables: Vec<String>) -> Self {
         CreateWorkflowInstanceWithResultBuilder {
-            fetch_variables: variables.into_iter().collect(),
+            fetch_variables,
             ..self
         }
     }

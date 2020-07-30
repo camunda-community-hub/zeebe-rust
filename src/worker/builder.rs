@@ -3,10 +3,12 @@ use crate::error::{Error, Result};
 use crate::proto;
 use crate::worker::{job_dispatcher, Job, JobPoller, PollMessage};
 use futures::future::BoxFuture;
-use futures::StreamExt;
-use serde::export::Formatter;
+use futures::{FutureExt, StreamExt};
+use serde::Serialize;
+use serde_json::json;
 use std::fmt;
 use std::future::Future;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::{sync::mpsc, time::interval};
 
@@ -20,16 +22,17 @@ static DEFAULT_JOB_WORKER_POLL_THRESHOLD: f32 = 0.3;
 static REQUEST_TIMEOUT_OFFSET: Duration = Duration::from_secs(10);
 static DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub(crate) struct JobHandler(Box<dyn Fn(Client, Job) -> BoxFuture<'static, Result<()>>>);
+#[derive(Clone)]
+pub(crate) struct JobHandler(Arc<dyn Fn(Client, Job) -> BoxFuture<'static, ()> + Send + Sync>);
 
 impl JobHandler {
-    pub(crate) fn call(&self, client: Client, job: Job) -> BoxFuture<'static, Result<()>> {
+    pub(crate) fn call(&self, client: Client, job: Job) -> BoxFuture<'static, ()> {
         self.0(client, job)
     }
 }
 
 impl fmt::Debug for JobHandler {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "JobHandler")
     }
 }
@@ -43,6 +46,7 @@ pub struct JobWorkerBuilder<'a> {
     poll_interval: Duration,
     poll_threshold: f32,
     request: proto::ActivateJobsRequest,
+    request_timeout: Duration,
 }
 
 impl<'a> JobWorkerBuilder<'a> {
@@ -60,9 +64,9 @@ impl<'a> JobWorkerBuilder<'a> {
                 timeout: DEFAULT_JOB_TIMEOUT_IN_MS,
                 max_jobs_to_activate: DEFAULT_JOB_WORKER_MAX_JOB_ACTIVE as i32,
                 fetch_variable: Vec::new(),
-                request_timeout: (DEFAULT_REQUEST_TIMEOUT + REQUEST_TIMEOUT_OFFSET).as_millis()
-                    as i64,
+                request_timeout: DEFAULT_REQUEST_TIMEOUT.as_millis() as i64,
             },
+            request_timeout: DEFAULT_REQUEST_TIMEOUT + REQUEST_TIMEOUT_OFFSET,
         }
     }
 
@@ -78,18 +82,92 @@ impl<'a> JobWorkerBuilder<'a> {
         self
     }
 
+    /// Set the worker job timeout.
+    ///
+    /// See [the requesting jobs docs] for more details.
+    ///
+    /// [the requesting jobs docs]: https://docs.zeebe.io/basics/job-workers.html#requesting-jobs-from-the-broker
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.request.timeout = timeout.as_millis() as i64;
+        self
+    }
+
+    /// Set the worker request timeout.
+    ///
+    /// See [the requesting jobs docs] for more details.
+    ///
+    /// [the requesting jobs docs]: https://docs.zeebe.io/basics/job-workers.html#requesting-jobs-from-the-broker
+    pub fn with_request_timeout(mut self, request_timeout: Duration) -> Self {
+        self.request.request_timeout = request_timeout.as_millis() as i64;
+        self.request_timeout = request_timeout + REQUEST_TIMEOUT_OFFSET;
+        self
+    }
+
+    /// Set the maximum jobs to activate at a time by the worker.
+    pub fn with_max_jobs_active(mut self, max_jobs_active: u32) -> Self {
+        self.request.max_jobs_to_activate = max_jobs_active as i32;
+        self
+    }
+
+    /// Set the max number of jobs to run concurrently.
+    pub fn with_concurrency(self, concurrency: u32) -> Self {
+        JobWorkerBuilder {
+            concurrency,
+            ..self
+        }
+    }
+
     /// Set the handler function for the worker.
     pub fn with_handler<T, R>(self, handler: T) -> Self
     where
-        T: Fn(Client, Job) -> R + 'static,
-        R: Future<Output = Result<()>> + Send + 'static,
+        T: Fn(Client, Job) -> R + Send + Sync + 'static,
+        R: Future<Output = ()> + Send + 'static,
     {
         JobWorkerBuilder {
-            handler: Some(JobHandler(Box::new(move |client, job| {
+            handler: Some(JobHandler(Arc::new(move |client, job| {
                 Box::pin(handler(client, job))
             }))),
             ..self
         }
+    }
+
+    /// Set a handler function that completes or fails the job based on the result
+    /// rather than having to explicitly use the client to report job status.
+    pub fn with_auto_handler<F, R, E, T>(self, handler: F) -> Self
+    where
+        F: Fn(Client, Job) -> R + Send + Sync + 'static,
+        R: Future<Output = std::result::Result<T, E>> + Send + 'static,
+        E: std::error::Error,
+        T: Serialize,
+    {
+        self.with_handler(move |mut client, job| {
+            let job_key = job.key();
+            handler(client.clone(), job).then(move |result| match result {
+                Ok(variables) => client
+                    .complete_job()
+                    .with_job_key(job_key)
+                    .with_variables(json!(variables))
+                    .send()
+                    .map(|_| ())
+                    .left_future(),
+                Err(err) => client
+                    .fail_job()
+                    .with_job_key(job_key)
+                    .with_error_message(err.to_string())
+                    .send()
+                    .map(|_| ())
+                    .right_future(),
+            })
+        })
+    }
+
+    /// Set the list of variables to fetch as the job variables.
+    ///
+    /// By default all visible variables at the time of activation for the scope of
+    /// the job will be returned.
+    pub fn with_fetch_variables(mut self, fetch_variables: Vec<String>) -> Self {
+        self.request.fetch_variable = fetch_variables;
+        self
     }
 
     /// Start the worker as a future. To stop the worker, simply drop the future.

@@ -1,6 +1,6 @@
 use crate::{client::Client, proto};
 use futures::{
-    future::TryFutureExt,
+    future::{FutureExt, TryFutureExt},
     stream::{BoxStream, StreamExt},
 };
 use std::fmt;
@@ -32,12 +32,12 @@ impl fmt::Debug for JobPoller {
 pub(crate) enum PollMessage {
     FetchJobs,
     JobsArrived(u32),
-    JobFetchFailed,
+    FetchJobsComplete,
     JobFinished,
 }
 
 /// An activate Zeebe job that is ready to be worked on by a worker.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Job(proto::ActivatedJob);
 
 impl Job {
@@ -114,53 +114,59 @@ impl JobPoller {
     fn should_activate_jobs(&self) -> bool {
         self.remaining <= self.threshold && !self.request_in_progress
     }
+
     fn activate_jobs(&mut self) {
         self.request.max_jobs_to_activate = (self.max_jobs_active - self.remaining) as i32;
         let mut job_queue = self.job_queue.clone();
         let mut poll_queue = self.message_sender.clone();
+        let mut retry_queue = self.message_sender.clone();
         let worker = self.request.worker.clone();
+        let retry_worker = self.request.worker.clone();
         let mut gateway_client = self.client.gateway_client.clone();
         let request = self.request.clone();
 
-        tokio::spawn(timeout(self.request_timeout, async move {
-            tracing::trace!(?worker, "fetching new jobs");
+        tokio::spawn(
+            timeout(self.request_timeout, async move {
+                tracing::trace!(?worker, "fetching new jobs");
 
-            if let Ok(mut stream) = gateway_client
-                .activate_jobs(tonic::Request::new(request))
-                .map_ok(|response| response.into_inner())
-                .map_err(|err| {
-                    tracing::error!(?worker, ?err, "Failed to fetch new jobs");
-                })
-                .await
-            {
-                let mut total_jobs = 0;
-                while let Some(Ok(batch)) = stream.next().await {
-                    total_jobs += batch.jobs.len() as u32;
-                    for job in batch.jobs {
-                        let _ = job_queue
-                            .send(Job(job))
-                            .inspect_err(|err| {
-                                tracing::error!(?worker, ?err, "job queue send failed");
-                            })
-                            .await;
+                if let Ok(mut stream) = gateway_client
+                    .activate_jobs(tonic::Request::new(request))
+                    .map_ok(|response| response.into_inner())
+                    .map_err(|err| {
+                        tracing::error!(?worker, ?err, "Failed to fetch new jobs");
+                    })
+                    .await
+                {
+                    let mut total_jobs = 0;
+                    while let Some(Ok(batch)) = stream.next().await {
+                        total_jobs += batch.jobs.len() as u32;
+                        for job in batch.jobs {
+                            let _ = job_queue
+                                .send(Job(job))
+                                .inspect_err(|err| {
+                                    tracing::error!(?worker, ?err, "job queue send failed");
+                                })
+                                .await;
+                        }
                     }
+                    tracing::trace!(?worker, "received {} new job(s)", total_jobs);
+                    let _ = poll_queue
+                        .send(PollMessage::JobsArrived(total_jobs))
+                        .inspect_err(|err| {
+                            tracing::error!(?worker, ?err, "poll queue send failed");
+                        })
+                        .await;
                 }
-                tracing::trace!(?worker, "received {} new job(s)", total_jobs);
-                let _ = poll_queue
-                    .send(PollMessage::JobsArrived(total_jobs))
+            })
+            .then(|_| async move {
+                let _ = retry_queue
+                    .send(PollMessage::FetchJobsComplete)
                     .inspect_err(|err| {
-                        tracing::error!(?worker, ?err, "poll queue send failed");
+                        tracing::error!(?retry_worker, ?err, "fetch failed poll queue send failed");
                     })
                     .await;
-            } else {
-                let _ = poll_queue
-                    .send(PollMessage::JobFetchFailed)
-                    .inspect_err(|err| {
-                        tracing::error!(?worker, ?err, "fetch failed poll queue send failed");
-                    })
-                    .await;
-            }
-        }));
+            }),
+        );
     }
 }
 
@@ -173,11 +179,6 @@ impl Future for JobPoller {
                 // new work arrived
                 Some(PollMessage::JobsArrived(new_job_count)) => {
                     self.remaining = self.remaining.saturating_add(new_job_count);
-                    self.request_in_progress = false;
-                }
-                // fetching new work failed
-                Some(PollMessage::JobFetchFailed) => {
-                    self.request_in_progress = false;
                 }
                 // a job was finished by a worker
                 Some(PollMessage::JobFinished) => {
@@ -190,6 +191,10 @@ impl Future for JobPoller {
                 }
                 // ignore poll interval if not ready for more work
                 Some(PollMessage::FetchJobs) => {}
+                // fetching jobs either completed or failed, either way ready to fetch again.
+                Some(PollMessage::FetchJobsComplete) => {
+                    self.request_in_progress = false;
+                }
                 // poller should stop
                 None => return Poll::Ready(()),
             }

@@ -14,7 +14,7 @@
 //! ## Example
 //!
 //! ```no_run
-//! use std::collections::HashMap;
+//! use serde_json::json;
 //! use zeebe::{Client, Job};
 //!
 //! #[tokio::main]
@@ -29,13 +29,11 @@
 //!         .await?;
 //!
 //!     // Create a new workflow instance
-//!     let mut variables = HashMap::new();
-//!     variables.insert("orderId", "31243");
 //!     client
 //!         .create_workflow_instance()
 //!         .with_bpmn_process_id("order-process")
 //!         .with_latest_version()
-//!         .with_variables(serde_json::to_value(variables)?)
+//!         .with_variables(json!({"orderId": 31243}))
 //!         .send()
 //!         .await?;
 //!
@@ -50,9 +48,10 @@
 //!     Ok(())
 //! }
 //!
-//! async fn handle_job(client: Client, job: Job) -> zeebe::Result<()> {
+//! async fn handle_job(mut client: Client, job: Job) {
 //!     /// your job processing logic...
-//!     Ok(())
+//!
+//!     let _ = client.complete_job().with_job_key(job.key()).send().await;
 //! }
 //! ```
 #![warn(

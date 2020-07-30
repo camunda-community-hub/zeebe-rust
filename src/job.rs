@@ -3,15 +3,15 @@ use tracing::debug;
 
 /// Configuration to complete a job
 #[derive(Debug)]
-pub struct CompleteJobBuilder<'a> {
-    client: &'a mut Client,
+pub struct CompleteJobBuilder {
+    client: Client,
     job_key: Option<i64>,
     variables: Option<serde_json::Value>,
 }
 
-impl<'a> CompleteJobBuilder<'a> {
+impl CompleteJobBuilder {
     /// Create a new complete job builder.
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         CompleteJobBuilder {
             client,
             job_key: None,
@@ -39,7 +39,7 @@ impl<'a> CompleteJobBuilder<'a> {
 
     /// Submit the complete job request.
     #[tracing::instrument(skip(self), fields(method = "complete_job"))]
-    pub async fn send(self) -> Result<CompleteJobResponse> {
+    pub async fn send(mut self) -> Result<CompleteJobResponse> {
         if self.job_key.is_none() {
             return Err(Error::InvalidParameters("`job_key` must be set"));
         }
@@ -67,16 +67,16 @@ pub struct CompleteJobResponse(proto::CompleteJobResponse);
 
 /// Configuration to fail a job
 #[derive(Debug)]
-pub struct FailJobBuilder<'a> {
-    client: &'a mut Client,
+pub struct FailJobBuilder {
+    client: Client,
     job_key: Option<i64>,
     retries: Option<u32>,
     error_message: Option<String>,
 }
 
-impl<'a> FailJobBuilder<'a> {
+impl FailJobBuilder {
     /// Create a new fail job builder.
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         FailJobBuilder {
             client,
             job_key: None,
@@ -115,7 +115,7 @@ impl<'a> FailJobBuilder<'a> {
 
     /// Submit the fail job request.
     #[tracing::instrument(skip(self), fields(method = "fail_job"))]
-    pub async fn send(self) -> Result<FailJobResponse> {
+    pub async fn send(mut self) -> Result<FailJobResponse> {
         if self.job_key.is_none() {
             return Err(Error::InvalidParameters("`job_key` must be set"));
         }

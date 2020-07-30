@@ -74,8 +74,8 @@ impl Client {
 
     /// Completes a job with the given payload, which allows completing the
     /// associated service task.
-    pub fn complete_job(&mut self) -> CompleteJobBuilder<'_> {
-        CompleteJobBuilder::new(self)
+    pub fn complete_job(&mut self) -> CompleteJobBuilder {
+        CompleteJobBuilder::new(self.clone())
     }
 
     /// Marks the job as failed.
@@ -85,8 +85,8 @@ impl Client {
     /// or negative however, an incident will be raised, tagged with the given
     /// error_message, and the job will not be activatable until the incident is
     /// resolved.
-    pub fn fail_job(&mut self) -> FailJobBuilder<'_> {
-        FailJobBuilder::new(self)
+    pub fn fail_job(&mut self) -> FailJobBuilder {
+        FailJobBuilder::new(self.clone())
     }
 
     /// Throw an error to indicate that a business error has occurred while
