@@ -93,7 +93,7 @@ pub use client::{Client, ClientConfig};
 pub use error::{Error, Result};
 pub use job::{
     CompleteJobBuilder, CompleteJobResponse, FailJobBuilder, FailJobResponse, ThrowErrorBuilder,
-    ThrowErrorResponse,
+    ThrowErrorResponse, UpdateJobRetriesBuilder, UpdateJobRetriesResponse,
 };
 pub use topology::{BrokerInfo, Partition, TopologyBuilder, TopologyResponse};
 pub use util::{
@@ -104,5 +104,5 @@ pub use workflow::{
     CancelWorkflowInstanceBuilder, CancelWorkflowInstanceResponse, CreateWorkflowInstanceBuilder,
     CreateWorkflowInstanceResponse, CreateWorkflowInstanceWithResultBuilder,
     CreateWorkflowInstanceWithResultResponse, DeployWorkflowBuilder, DeployWorkflowResponse,
-    WorkflowMetadata,
+    SetVariablesBuilder, SetVariablesResponse, WorkflowMetadata,
 };

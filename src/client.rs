@@ -1,13 +1,13 @@
 use crate::{
     error::{Error, Result},
-    job::{CompleteJobBuilder, FailJobBuilder, ThrowErrorBuilder},
+    job::{CompleteJobBuilder, FailJobBuilder, ThrowErrorBuilder, UpdateJobRetriesBuilder},
     proto::gateway_client::GatewayClient,
     topology::TopologyBuilder,
     util::{PublishMessageBuilder, ResolveIncidentBuilder},
     worker::JobWorkerBuilder,
     workflow::{
         CancelWorkflowInstanceBuilder, CreateWorkflowInstanceBuilder,
-        CreateWorkflowInstanceWithResultBuilder, DeployWorkflowBuilder,
+        CreateWorkflowInstanceWithResultBuilder, DeployWorkflowBuilder, SetVariablesBuilder,
     },
 };
 use std::fmt::Debug;
@@ -67,6 +67,11 @@ impl Client {
         CancelWorkflowInstanceBuilder::new(self)
     }
 
+    /// Create a new set variables builder.
+    pub fn set_variables(&mut self) -> SetVariablesBuilder<'_> {
+        SetVariablesBuilder::new(self)
+    }
+
     /// Create a new job worker builder.
     pub fn job_worker(&mut self) -> JobWorkerBuilder<'_> {
         JobWorkerBuilder::new(self)
@@ -87,6 +92,12 @@ impl Client {
     /// resolved.
     pub fn fail_job(&mut self) -> FailJobBuilder {
         FailJobBuilder::new(self.clone())
+    }
+
+    /// Updates the number of retries a job has left. This is mostly useful for jobs
+    /// that have run out of retries, should the underlying problem be solved.
+    pub fn update_job_retries(&mut self) -> UpdateJobRetriesBuilder<'_> {
+        UpdateJobRetriesBuilder::new(self)
     }
 
     /// Throw an error to indicate that a business error has occurred while

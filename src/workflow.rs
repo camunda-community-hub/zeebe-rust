@@ -489,3 +489,113 @@ impl<'a> CancelWorkflowInstanceBuilder<'a> {
 /// Canceled workflow instance data.
 #[derive(Debug)]
 pub struct CancelWorkflowInstanceResponse(proto::CancelWorkflowInstanceResponse);
+
+/// Updates all the variables of a particular scope (e.g. workflow instance, flow
+/// element instance) from the given JSON document.
+#[derive(Debug)]
+pub struct SetVariablesBuilder<'a> {
+    client: &'a mut Client,
+    element_instance_key: Option<i64>,
+    variables: Option<serde_json::Value>,
+    local: bool,
+}
+
+impl<'a> SetVariablesBuilder<'a> {
+    /// Create a new set variables builder
+    pub fn new(client: &'a mut Client) -> Self {
+        SetVariablesBuilder {
+            client,
+            element_instance_key: None,
+            variables: None,
+            local: false,
+        }
+    }
+
+    /// Set the unique identifier of this element.
+    ///
+    /// can be the workflow instance key (as obtained during instance creation), or
+    /// a given element, such as a service task (see `element_instance_key` on the job
+    /// message).
+    pub fn with_element_instance_key(self, element_instance_key: i64) -> Self {
+        SetVariablesBuilder {
+            element_instance_key: Some(element_instance_key),
+            ..self
+        }
+    }
+
+    /// Set variables for this element.
+    ///
+    /// Variables are a JSON serialized document describing variables as key value
+    /// pairs; the root of the document must be a JSON object.
+    // must be an object
+    pub fn with_variables<T: Into<serde_json::Value>>(self, variables: T) -> Self {
+        SetVariablesBuilder {
+            variables: Some(variables.into()),
+            ..self
+        }
+    }
+
+    /// Set local scope for this request.
+    ///
+    /// If set to `true`, the variables will be merged strictly into the local scope
+    /// (as indicated by element_instance_key); this means the variables are not
+    /// propagated to upper scopes.
+    ///
+    /// ## Example
+    ///
+    /// Two scopes:
+    ///
+    /// * 1 => `{ "foo" : 2 }`
+    /// * 2 => `{ "bar" : 1 }`
+    ///
+    /// If we send an update request with `element_instance_key` = `2`, variables
+    /// `{ "foo" : 5 }`, and `local` is `true`, then the result is:
+    ///
+    /// * 1 => `{ "foo" : 2 }`
+    /// * 2 => `{ "bar" : 1, "foo" 5 }`
+    ///
+    /// If `local` was `false`, however, then the result is:
+    ///
+    /// * 1 => `{ "foo": 5 }`,
+    /// * 2 => `{ "bar" : 1 }`
+    pub fn with_local(self, local: bool) -> Self {
+        SetVariablesBuilder { local, ..self }
+    }
+
+    /// Submit this workflow instance to the configured Zeebe brokers.
+    #[tracing::instrument(skip(self), fields(method = "set_variables"))]
+    pub async fn send(self) -> Result<SetVariablesResponse> {
+        if self.element_instance_key.is_none() {
+            return Err(Error::InvalidParameters(
+                "`element_instance_key` must be set",
+            ));
+        }
+        let req = proto::SetVariablesRequest {
+            element_instance_key: self.element_instance_key.unwrap(),
+            variables: self
+                .variables
+                .map_or(String::new(), |vars| vars.to_string()),
+            local: self.local,
+        };
+
+        debug!(?req, "sending request:");
+        let res = self
+            .client
+            .gateway_client
+            .set_variables(tonic::Request::new(req))
+            .await?;
+
+        Ok(SetVariablesResponse(res.into_inner()))
+    }
+}
+
+/// Set variables data.
+#[derive(Debug)]
+pub struct SetVariablesResponse(proto::SetVariablesResponse);
+
+impl SetVariablesResponse {
+    /// The unique key of the set variables command.
+    pub fn key(&self) -> i64 {
+        self.0.key
+    }
+}

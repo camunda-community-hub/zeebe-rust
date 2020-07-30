@@ -212,3 +212,68 @@ impl<'a> ThrowErrorBuilder<'a> {
 /// Throw error response data.
 #[derive(Debug)]
 pub struct ThrowErrorResponse(proto::ThrowErrorResponse);
+
+/// Updates the number of retries a job has left. This is mostly useful for jobs
+/// that have run out of retries, should the underlying problem be solved.
+#[derive(Debug)]
+pub struct UpdateJobRetriesBuilder<'a> {
+    client: &'a mut Client,
+    job_key: Option<i64>,
+    retries: Option<u32>,
+}
+
+impl<'a> UpdateJobRetriesBuilder<'a> {
+    /// Create a new update retries builder.
+    pub fn new(client: &'a mut Client) -> Self {
+        UpdateJobRetriesBuilder {
+            client,
+            job_key: None,
+            retries: None,
+        }
+    }
+
+    /// Set the unique job identifier, as obtained from [`ActivateJobsResponse`].
+    ///
+    /// [`ActivateJobsResponse`]: struct.ActivateJobsResponse.html
+    pub fn with_job_key(self, job_key: i64) -> Self {
+        UpdateJobRetriesBuilder {
+            job_key: Some(job_key),
+            ..self
+        }
+    }
+
+    /// Set the new amount of retries for the job
+    pub fn with_retries(self, retries: u32) -> Self {
+        UpdateJobRetriesBuilder {
+            retries: Some(retries),
+            ..self
+        }
+    }
+
+    /// Submit the update job retries request.
+    #[tracing::instrument(skip(self), fields(method = "update_job_retries"))]
+    pub async fn send(self) -> Result<UpdateJobRetriesResponse> {
+        if self.job_key.is_none() || self.retries.is_none() {
+            return Err(Error::InvalidParameters(
+                "`job_key` and `retries` must be set",
+            ));
+        }
+        let req = proto::UpdateJobRetriesRequest {
+            job_key: self.job_key.unwrap(),
+            retries: self.retries.unwrap() as i32,
+        };
+
+        debug!(?req, "sending request:");
+        let res = self
+            .client
+            .gateway_client
+            .update_job_retries(tonic::Request::new(req))
+            .await?;
+
+        Ok(UpdateJobRetriesResponse(res.into_inner()))
+    }
+}
+
+/// Update job retries data.
+#[derive(Debug)]
+pub struct UpdateJobRetriesResponse(proto::UpdateJobRetriesResponse);
