@@ -3,17 +3,17 @@ use tracing::debug;
 
 /// Request to obtain the current topology of the cluster the gateway is part of.
 #[derive(Debug)]
-pub struct TopologyBuilder<'a>(&'a mut Client);
+pub struct TopologyBuilder(Client);
 
-impl<'a> TopologyBuilder<'a> {
+impl TopologyBuilder {
     /// Create a new topology request builder.
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         TopologyBuilder(client)
     }
 
     /// Send a topology request to the configured gateway.
     #[tracing::instrument(skip(self), fields(method = "topology"))]
-    pub async fn send(self) -> Result<TopologyResponse> {
+    pub async fn send(mut self) -> Result<TopologyResponse> {
         let req = proto::TopologyRequest {};
         debug!(?req, "sending request");
 

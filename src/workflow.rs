@@ -7,8 +7,8 @@ use tracing::{debug, trace};
 /// Note that this is an atomic call, i.e. either all workflows are deployed, or
 /// none of them are.
 #[derive(Debug)]
-pub struct DeployWorkflowBuilder<'a> {
-    client: &'a mut Client,
+pub struct DeployWorkflowBuilder {
+    client: Client,
     resource_files: Vec<String>,
     resource_type: WorkflowResourceType,
 }
@@ -25,9 +25,9 @@ pub enum WorkflowResourceType {
     Yaml = 2,
 }
 
-impl<'a> DeployWorkflowBuilder<'a> {
+impl DeployWorkflowBuilder {
     /// Create a new deploy workflow builder.
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         DeployWorkflowBuilder {
             client,
             resource_files: Vec::new(),
@@ -61,7 +61,7 @@ impl<'a> DeployWorkflowBuilder<'a> {
 
     /// Submit the workflows to the Zeebe brokers.
     #[tracing::instrument(skip(self), fields(method = "deploy_workflow"))]
-    pub async fn send(self) -> Result<DeployWorkflowResponse> {
+    pub async fn send(mut self) -> Result<DeployWorkflowResponse> {
         // Read workflow definitions
         trace!(files = ?self.resource_files, resource_type = ?self.resource_type, "reading files");
         let mut workflows = Vec::with_capacity(self.resource_files.len());
@@ -148,19 +148,21 @@ impl WorkflowMetadata {
 /// Creates and starts an instance of the specified workflow.
 ///
 /// The workflow definition to use to create the instance can be specified
-/// either using its unique key (as returned by [DeployWorkflowResponse]), or using the
+/// either using its unique key (as returned by [`DeployWorkflowResponse`]), or using the
 /// BPMN process ID and a version. Pass -1 as the version to use the latest
 /// deployed version.
 ///
 /// Note that only workflows with none start events can be started through this
 /// command.
 ///
-/// [DeployWorkflowResponse]: struct.DeployWorkflowResponse.html
+/// [`DeployWorkflowResponse`]: struct.DeployWorkflowResponse.html
 #[derive(Debug)]
-pub struct CreateWorkflowInstanceBuilder<'a> {
-    client: &'a mut Client,
+pub struct CreateWorkflowInstanceBuilder {
+    client: Client,
     /// the unique key identifying the workflow definition (e.g. returned from a
-    /// workflow in the DeployWorkflowResponse message)
+    /// workflow in the [`DeployWorkflowResponse`] message)
+    ///
+    /// [`DeployWorkflowResponse`]: struct.DeployWorkflowResponse.html
     workflow_key: Option<i64>,
     /// the BPMN process ID of the workflow definition
     bpmn_process_id: Option<String>,
@@ -175,9 +177,9 @@ pub struct CreateWorkflowInstanceBuilder<'a> {
     variables: Option<serde_json::Value>,
 }
 
-impl<'a> CreateWorkflowInstanceBuilder<'a> {
+impl CreateWorkflowInstanceBuilder {
     /// Create a new workflow instance builder
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         CreateWorkflowInstanceBuilder {
             client,
             workflow_key: None,
@@ -226,7 +228,7 @@ impl<'a> CreateWorkflowInstanceBuilder<'a> {
 
     /// Submit this workflow instance to the configured Zeebe brokers.
     #[tracing::instrument(skip(self), fields(method = "create_workflow_instance"))]
-    pub async fn send(self) -> Result<CreateWorkflowInstanceResponse> {
+    pub async fn send(mut self) -> Result<CreateWorkflowInstanceResponse> {
         if self.workflow_key.is_none() && self.bpmn_process_id.is_none() {
             return Err(Error::InvalidParameters(
                 "`workflow_key` or `pbmn_process_id` must be set",
@@ -293,8 +295,8 @@ impl CreateWorkflowInstanceResponse {
 ///
 /// [`CreateWorkflowInstanceBuilder`]: struct.CreateWorkflowInstanceBuilder.html
 #[derive(Debug)]
-pub struct CreateWorkflowInstanceWithResultBuilder<'a> {
-    client: &'a mut Client,
+pub struct CreateWorkflowInstanceWithResultBuilder {
+    client: Client,
     /// the unique key identifying the workflow definition (e.g. returned from a
     /// workflow in the DeployWorkflowResponse message)
     workflow_key: Option<i64>,
@@ -322,9 +324,9 @@ pub struct CreateWorkflowInstanceWithResultBuilder<'a> {
     fetch_variables: Vec<String>,
 }
 
-impl<'a> CreateWorkflowInstanceWithResultBuilder<'a> {
+impl CreateWorkflowInstanceWithResultBuilder {
     /// Create a new workflow instance builder
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         CreateWorkflowInstanceWithResultBuilder {
             client,
             workflow_key: None,
@@ -391,7 +393,7 @@ impl<'a> CreateWorkflowInstanceWithResultBuilder<'a> {
 
     /// Submit this workflow instance to the configured Zeebe brokers.
     #[tracing::instrument(skip(self), fields(method = "create_workflow_instance_with_result"))]
-    pub async fn send(self) -> Result<CreateWorkflowInstanceWithResultResponse> {
+    pub async fn send(mut self) -> Result<CreateWorkflowInstanceWithResultResponse> {
         if self.workflow_key.is_none() && self.bpmn_process_id.is_none() {
             return Err(Error::InvalidParameters(
                 "`workflow_key` or `pbmn_process_id` must be set",
@@ -460,38 +462,42 @@ impl CreateWorkflowInstanceWithResultResponse {
 
 /// Cancels a running workflow instance.
 #[derive(Debug)]
-pub struct CancelWorkflowInstanceBuilder<'a> {
-    client: &'a mut Client,
-    /// the unique key identifying the workflow definition (e.g. returned from a
-    /// workflow in the DeployWorkflowResponse message)
-    workflow_key: Option<i64>,
+pub struct CancelWorkflowInstanceBuilder {
+    client: Client,
+    /// The unique key identifying the workflow instance (e.g. returned from a
+    /// workflow in the [`CreateWorkflowInstanceResponse`] struct).
+    ///
+    /// [`CreateWorkflowInstanceResponse`]: struct.CreateWorkflowInstanceResponse.html
+    workflow_instance_key: Option<i64>,
 }
 
-impl<'a> CancelWorkflowInstanceBuilder<'a> {
+impl CancelWorkflowInstanceBuilder {
     /// Create a new cancel workflow instance builder
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         CancelWorkflowInstanceBuilder {
             client,
-            workflow_key: None,
+            workflow_instance_key: None,
         }
     }
 
-    /// Set the workflow key for this instance.
-    pub fn with_workflow_key(self, workflow_key: i64) -> Self {
+    /// Set the workflow instance key.
+    pub fn with_workflow_instance_key(self, workflow_key: i64) -> Self {
         CancelWorkflowInstanceBuilder {
-            workflow_key: Some(workflow_key),
+            workflow_instance_key: Some(workflow_key),
             ..self
         }
     }
 
-    /// Submit this workflow instance to the configured Zeebe brokers.
+    /// Submit this cancel workflow instance request to the configured Zeebe brokers.
     #[tracing::instrument(skip(self), fields(method = "cancel_workflow_instance"))]
-    pub async fn send(self) -> Result<CancelWorkflowInstanceResponse> {
-        if self.workflow_key.is_none() {
-            return Err(Error::InvalidParameters("`workflow_key` must be set"));
+    pub async fn send(mut self) -> Result<CancelWorkflowInstanceResponse> {
+        if self.workflow_instance_key.is_none() {
+            return Err(Error::InvalidParameters(
+                "`workflow_instance_key` must be set",
+            ));
         }
         let req = proto::CancelWorkflowInstanceRequest {
-            workflow_instance_key: self.workflow_key.unwrap(),
+            workflow_instance_key: self.workflow_instance_key.unwrap(),
         };
 
         debug!(?req, "sending request:");
@@ -512,16 +518,16 @@ pub struct CancelWorkflowInstanceResponse(proto::CancelWorkflowInstanceResponse)
 /// Updates all the variables of a particular scope (e.g. workflow instance, flow
 /// element instance) from the given JSON document.
 #[derive(Debug)]
-pub struct SetVariablesBuilder<'a> {
-    client: &'a mut Client,
+pub struct SetVariablesBuilder {
+    client: Client,
     element_instance_key: Option<i64>,
     variables: Option<serde_json::Value>,
     local: bool,
 }
 
-impl<'a> SetVariablesBuilder<'a> {
+impl SetVariablesBuilder {
     /// Create a new set variables builder
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         SetVariablesBuilder {
             client,
             element_instance_key: None,
@@ -581,9 +587,9 @@ impl<'a> SetVariablesBuilder<'a> {
         SetVariablesBuilder { local, ..self }
     }
 
-    /// Submit this workflow instance to the configured Zeebe brokers.
+    /// Submit this set variables request to the configured Zeebe brokers.
     #[tracing::instrument(skip(self), fields(method = "set_variables"))]
-    pub async fn send(self) -> Result<SetVariablesResponse> {
+    pub async fn send(mut self) -> Result<SetVariablesResponse> {
         if self.element_instance_key.is_none() {
             return Err(Error::InvalidParameters(
                 "`element_instance_key` must be set",

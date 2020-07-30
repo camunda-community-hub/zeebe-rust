@@ -7,7 +7,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let broker_addr = "http://0.0.0.0:26500".to_string();
-    let mut client = Client::from_config(ClientConfig::with_endpoints(vec![broker_addr]))?;
+    let client = Client::from_config(ClientConfig::with_endpoints(vec![broker_addr]))?;
     let topology = client.topology().send().await?;
 
     dbg!(topology);

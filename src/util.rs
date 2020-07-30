@@ -3,8 +3,8 @@ use tracing::debug;
 
 /// Configuration to publish a message.
 #[derive(Debug)]
-pub struct PublishMessageBuilder<'a> {
-    client: &'a mut Client,
+pub struct PublishMessageBuilder {
+    client: Client,
     name: Option<String>,
     correlation_key: Option<String>,
     time_to_live: Option<u64>,
@@ -12,9 +12,9 @@ pub struct PublishMessageBuilder<'a> {
     variables: Option<serde_json::Value>,
 }
 
-impl<'a> PublishMessageBuilder<'a> {
+impl PublishMessageBuilder {
     /// Create a new publish message builder.
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         PublishMessageBuilder {
             client,
             name: None,
@@ -68,7 +68,7 @@ impl<'a> PublishMessageBuilder<'a> {
 
     /// Submit the publish message request.
     #[tracing::instrument(skip(self), fields(method = "publish_message"))]
-    pub async fn send(self) -> Result<PublishMessageResponse> {
+    pub async fn send(mut self) -> Result<PublishMessageResponse> {
         if self.name.is_none() {
             return Err(Error::InvalidParameters("`name` must be set"));
         }
@@ -99,14 +99,14 @@ pub struct PublishMessageResponse(proto::PublishMessageResponse);
 
 /// Configuration to resolve an incident.
 #[derive(Debug)]
-pub struct ResolveIncidentBuilder<'a> {
-    client: &'a mut Client,
+pub struct ResolveIncidentBuilder {
+    client: Client,
     incident_key: Option<i64>,
 }
 
-impl<'a> ResolveIncidentBuilder<'a> {
+impl ResolveIncidentBuilder {
     /// Create a new resolve incident builder.
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         ResolveIncidentBuilder {
             client,
             incident_key: None,
@@ -123,7 +123,7 @@ impl<'a> ResolveIncidentBuilder<'a> {
 
     /// Submit the resolve incident request.
     #[tracing::instrument(skip(self), fields(method = "resolve_incident"))]
-    pub async fn send(self) -> Result<ResolveIncidentResponse> {
+    pub async fn send(mut self) -> Result<ResolveIncidentResponse> {
         if self.incident_key.is_none() {
             return Err(Error::InvalidParameters("`incident_key` must be set"));
         }

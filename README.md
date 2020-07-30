@@ -22,7 +22,7 @@ use zeebe::{Client, Job};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a zeebe client
-    let mut client = Client::default();
+    let client = Client::default();
 
     // Deploy a workflow
     client
@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn handle_job(mut client: Client, job: Job) {
+async fn handle_job(client: Client, job: Job) {
     /// your job processing logic...
 
     let _ = client.complete_job().with_job_key(job.key()).send().await;

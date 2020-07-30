@@ -39,8 +39,8 @@ impl fmt::Debug for JobHandler {
 
 /// Configuration for an asynchronous worker process.
 #[derive(Debug)]
-pub struct JobWorkerBuilder<'a> {
-    client: &'a mut Client,
+pub struct JobWorkerBuilder {
+    client: Client,
     handler: Option<JobHandler>,
     concurrency: u32,
     poll_interval: Duration,
@@ -49,9 +49,9 @@ pub struct JobWorkerBuilder<'a> {
     request_timeout: Duration,
 }
 
-impl<'a> JobWorkerBuilder<'a> {
+impl JobWorkerBuilder {
     /// Create a new job worker builder.
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         JobWorkerBuilder {
             client,
             handler: None,
@@ -140,7 +140,7 @@ impl<'a> JobWorkerBuilder<'a> {
         E: std::error::Error,
         T: Serialize,
     {
-        self.with_handler(move |mut client, job| {
+        self.with_handler(move |client, job| {
             let job_key = job.key();
             handler(client.clone(), job).then(move |result| match result {
                 Ok(variables) => client

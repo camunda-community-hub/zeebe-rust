@@ -32,6 +32,43 @@ impl Client {
     }
 
     /// Build a new Zeebe client from a given configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zeebe::{Client, ClientConfig};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let endpoints = vec!["http://0.0.0.0:26500".to_string()];
+    ///
+    /// let client = Client::from_config(ClientConfig {
+    ///     endpoints,
+    ///     tls: None
+    /// })?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// with TLS (see [the ClientTlsConfig docs] for configuration):
+    ///
+    /// [the ClientTlsConfig docs]: https://docs.rs/tonic/latest/tonic/transport/struct.ClientTlsConfig.html
+    ///
+    /// ```
+    /// use zeebe::{Client, ClientConfig};
+    /// use tonic::transport::ClientTlsConfig;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let endpoints = vec!["http://0.0.0.0:26500".to_string()];
+    /// let tls = ClientTlsConfig::new();
+    ///
+    /// let client = Client::from_config(ClientConfig {
+    ///     endpoints,
+    ///     tls: Some(tls),
+    /// })?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn from_config(config: ClientConfig) -> Result<Self> {
         let channel = Self::build_channel(config)?;
 
@@ -41,14 +78,41 @@ impl Client {
     }
 
     /// Obtains the current topology of the cluster the gateway is part of.
-    pub fn topology(&mut self) -> TopologyBuilder<'_> {
-        TopologyBuilder::new(self)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// let topology = client.topology().send().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn topology(&self) -> TopologyBuilder {
+        TopologyBuilder::new(self.clone())
     }
 
     /// Deploys one or more workflows to Zeebe. Note that this is an atomic call,
     /// i.e. either all workflows are deployed, or none of them are.
-    pub fn deploy_workflow(&mut self) -> DeployWorkflowBuilder<'_> {
-        DeployWorkflowBuilder::new(self)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// let workflow = client
+    ///     .deploy_workflow()
+    ///     .with_resource_file("path/to/process.bpmn")
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn deploy_workflow(&self) -> DeployWorkflowBuilder {
+        DeployWorkflowBuilder::new(self.clone())
     }
 
     /// Creates and starts an instance of the specified workflow.
@@ -61,9 +125,28 @@ impl Client {
     /// Note that only workflows with none start events can be started through this
     /// command.
     ///
-    /// [`deploy_workflow`]: struct.Client.html#fn.deploy_workflow
-    pub fn create_workflow_instance(&mut self) -> CreateWorkflowInstanceBuilder<'_> {
-        CreateWorkflowInstanceBuilder::new(self)
+    /// [`deploy_workflow`]: struct.Client.html#method.deploy_workflow
+    ///
+    ///  # Examples
+    ///
+    /// ```no_run
+    /// use serde_json::json;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// let workflow_instance = client
+    ///     .create_workflow_instance()
+    ///     .with_bpmn_process_id("example-process")
+    ///     .with_latest_version()
+    ///     .with_variables(json!({"myData": 31243}))
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn create_workflow_instance(&self) -> CreateWorkflowInstanceBuilder {
+        CreateWorkflowInstanceBuilder::new(self.clone())
     }
 
     /// Similar to [`create_workflow_instance`], creates and starts an instance of
@@ -75,32 +158,131 @@ impl Client {
     /// Note that only workflows with none start events can be started through this
     /// command.
     ///
-    /// [`create_workflow_instance`]: struct.Client.html#fn.create_workflow_instance
-    pub fn create_workflow_instance_with_result(
-        &mut self,
-    ) -> CreateWorkflowInstanceWithResultBuilder<'_> {
-        CreateWorkflowInstanceWithResultBuilder::new(self)
+    /// [`create_workflow_instance`]: struct.Client.html#method.create_workflow_instance
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use serde_json::json;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// let workflow_instance_with_result = client
+    ///     .create_workflow_instance_with_result()
+    ///     .with_bpmn_process_id("example-process")
+    ///     .with_latest_version()
+    ///     .with_variables(json!({"myData": 31243}))
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn create_workflow_instance_with_result(&self) -> CreateWorkflowInstanceWithResultBuilder {
+        CreateWorkflowInstanceWithResultBuilder::new(self.clone())
     }
 
     /// Cancels a running workflow instance.
-    pub fn cancel_workflow_instance(&mut self) -> CancelWorkflowInstanceBuilder<'_> {
-        CancelWorkflowInstanceBuilder::new(self)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// // workflow instance key, e.g. from a `CreateWorkflowInstanceResponse`.
+    /// let workflow_instance_key = 2251799813687287;
+    ///
+    /// let canceled = client
+    ///     .cancel_workflow_instance()
+    ///     .with_workflow_instance_key(workflow_instance_key)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn cancel_workflow_instance(&self) -> CancelWorkflowInstanceBuilder {
+        CancelWorkflowInstanceBuilder::new(self.clone())
     }
 
     /// Updates all the variables of a particular scope (e.g. workflow instance,
     /// flow element instance) from the given JSON document.
-    pub fn set_variables(&mut self) -> SetVariablesBuilder<'_> {
-        SetVariablesBuilder::new(self)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use serde_json::json;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// // workflow instance key, e.g. from a `CreateWorkflowInstanceResponse`.
+    /// let element_instance_key = 2251799813687287;
+    ///
+    /// let set_variables = client
+    ///     .set_variables()
+    ///     .with_element_instance_key(element_instance_key)
+    ///     .with_variables(json!({"myNewKey": "myValue"}))
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn set_variables(&self) -> SetVariablesBuilder {
+        SetVariablesBuilder::new(self.clone())
     }
 
     /// Create a new job worker builder.
-    pub fn job_worker(&mut self) -> JobWorkerBuilder<'_> {
-        JobWorkerBuilder::new(self)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use zeebe::{Client, Job};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = Client::new();
+    ///
+    /// client
+    ///     .job_worker()
+    ///     .with_job_type("my-service")
+    ///     .with_handler(handle_job)
+    ///     .spawn()
+    ///     .await?;
+    ///
+    /// // job handler function
+    /// async fn handle_job(client: Client, job: Job) {
+    ///     // processing work...
+    ///
+    ///     let _ = client.complete_job().with_job_key(job.key()).send().await;
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn job_worker(&self) -> JobWorkerBuilder {
+        JobWorkerBuilder::new(self.clone())
     }
 
     /// Completes a job with the given payload, which allows completing the
     /// associated service task.
-    pub fn complete_job(&mut self) -> CompleteJobBuilder {
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// // typically obtained from `job.key()`;
+    /// let job_key = 2251799813687287;
+    ///
+    /// let completed_job = client
+    ///     .complete_job()
+    ///     .with_job_key(job_key)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn complete_job(&self) -> CompleteJobBuilder {
         CompleteJobBuilder::new(self.clone())
     }
 
@@ -111,7 +293,26 @@ impl Client {
     /// or negative however, an incident will be raised, tagged with the given
     /// `error_message`, and the job will not be activatable until the incident is
     /// resolved.
-    pub fn fail_job(&mut self) -> FailJobBuilder {
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// // typically obtained from `job.key()`;
+    /// let job_key = 2251799813687287;
+    ///
+    /// let failed_job = client
+    ///     .fail_job()
+    ///     .with_job_key(job_key)
+    ///     .with_error_message("something went wrong.")
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn fail_job(&self) -> FailJobBuilder {
         FailJobBuilder::new(self.clone())
     }
 
@@ -119,8 +320,27 @@ impl Client {
     ///
     /// This is mostly useful for jobs that have run out of retries, should the
     /// underlying problem be solved.
-    pub fn update_job_retries(&mut self) -> UpdateJobRetriesBuilder<'_> {
-        UpdateJobRetriesBuilder::new(self)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// // typically obtained from `job.key()`;
+    /// let job_key = 2251799813687287;
+    ///
+    /// let updated = client
+    ///     .update_job_retries()
+    ///     .with_job_key(job_key)
+    ///     .with_retries(2)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn update_job_retries(&self) -> UpdateJobRetriesBuilder {
+        UpdateJobRetriesBuilder::new(self.clone())
     }
 
     /// Throw an error to indicate that a business error has occurred while
@@ -128,26 +348,80 @@ impl Client {
     ///
     /// The error is identified by an error code and is handled by an error catch
     /// event in the workflow with the same error code.
-    pub fn throw_error(&mut self) -> ThrowErrorBuilder<'_> {
-        ThrowErrorBuilder::new(self)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// // typically obtained from `job.key()`;
+    /// let job_key = 2251799813687287;
+    ///
+    /// let error = client
+    ///     .throw_error()
+    ///     .with_job_key(job_key)
+    ///     .with_error_message("something went wrong")
+    ///     .with_error_code("E2505")
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn throw_error(&self) -> ThrowErrorBuilder {
+        ThrowErrorBuilder::new(self.clone())
     }
 
     /// Publishes a single message. Messages are published to specific partitions
     /// computed from their correlation keys.
-    pub fn publish_message(&mut self) -> PublishMessageBuilder<'_> {
-        PublishMessageBuilder::new(self)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use serde_json::json;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// let message = client
+    ///     .publish_message()
+    ///     .with_name("myEvent")
+    ///     .with_variables(json!({"someKey": "someValue"}))
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn publish_message(&self) -> PublishMessageBuilder {
+        PublishMessageBuilder::new(self.clone())
     }
 
     /// Resolves a given incident.
     ///
     /// This simply marks the incident as resolved; most likely a call to
-    /// [`update_job_retries`] or [`update_workload_instance_payload`] will be
-    /// necessary to actually resolve the problem, followed by this call.
+    /// [`update_job_retries`] will be necessary to actually resolve the problem,
+    /// followed by this call.
     ///
-    /// [`update_job_retries`]: struct.Client.html#fn.update_job_retries
-    /// [`update_workload_instance_payload`]: struct.Client.html#fn.update_workload_instance_payload
-    pub fn resolve_incident(&mut self) -> ResolveIncidentBuilder<'_> {
-        ResolveIncidentBuilder::new(self)
+    /// [`update_job_retries`]: struct.Client.html#method.update_job_retries
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// let incident_key = 2251799813687287;
+    ///
+    /// let resolved = client
+    ///     .resolve_incident()
+    ///     .with_incident_key(incident_key)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn resolve_incident(&self) -> ResolveIncidentBuilder {
+        ResolveIncidentBuilder::new(self.clone())
     }
 
     fn build_channel(config: ClientConfig) -> Result<Channel> {
@@ -173,6 +447,21 @@ impl Client {
 }
 
 /// Config for establishing zeebe client.
+///
+/// See [the ClientTlsConfig docs] for tls configuration.
+///
+/// [the ClientTlsConfig docs]: https://docs.rs/tonic/latest/tonic/transport/struct.ClientTlsConfig.html
+///
+/// # Examples
+///
+/// ```
+/// let endpoints = vec!["http://0.0.0.0:26500".to_string()];
+///
+/// let config = zeebe::ClientConfig {
+///     endpoints,
+///     tls: None
+/// };
+/// ```
 #[derive(Debug)]
 pub struct ClientConfig {
     /// The endpoints the client should connect to

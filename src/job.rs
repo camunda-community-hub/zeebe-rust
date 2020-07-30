@@ -142,16 +142,16 @@ pub struct FailJobResponse(proto::FailJobResponse);
 
 /// Configuration to throw an error in the context of a job.
 #[derive(Debug)]
-pub struct ThrowErrorBuilder<'a> {
-    client: &'a mut Client,
+pub struct ThrowErrorBuilder {
+    client: Client,
     job_key: Option<i64>,
     error_code: Option<String>,
     error_message: Option<String>,
 }
 
-impl<'a> ThrowErrorBuilder<'a> {
+impl ThrowErrorBuilder {
     /// Create a new throw error builder.
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         ThrowErrorBuilder {
             client,
             job_key: None,
@@ -188,7 +188,7 @@ impl<'a> ThrowErrorBuilder<'a> {
 
     /// Submit the throw error request.
     #[tracing::instrument(skip(self), fields(method = "throw_error"))]
-    pub async fn send(self) -> Result<ThrowErrorResponse> {
+    pub async fn send(mut self) -> Result<ThrowErrorResponse> {
         if self.job_key.is_none() {
             return Err(Error::InvalidParameters("`job_key` must be set"));
         }
@@ -216,15 +216,15 @@ pub struct ThrowErrorResponse(proto::ThrowErrorResponse);
 /// Updates the number of retries a job has left. This is mostly useful for jobs
 /// that have run out of retries, should the underlying problem be solved.
 #[derive(Debug)]
-pub struct UpdateJobRetriesBuilder<'a> {
-    client: &'a mut Client,
+pub struct UpdateJobRetriesBuilder {
+    client: Client,
     job_key: Option<i64>,
     retries: Option<u32>,
 }
 
-impl<'a> UpdateJobRetriesBuilder<'a> {
+impl UpdateJobRetriesBuilder {
     /// Create a new update retries builder.
-    pub fn new(client: &'a mut Client) -> Self {
+    pub fn new(client: Client) -> Self {
         UpdateJobRetriesBuilder {
             client,
             job_key: None,
@@ -252,7 +252,7 @@ impl<'a> UpdateJobRetriesBuilder<'a> {
 
     /// Submit the update job retries request.
     #[tracing::instrument(skip(self), fields(method = "update_job_retries"))]
-    pub async fn send(self) -> Result<UpdateJobRetriesResponse> {
+    pub async fn send(mut self) -> Result<UpdateJobRetriesResponse> {
         if self.job_key.is_none() || self.retries.is_none() {
             return Err(Error::InvalidParameters(
                 "`job_key` and `retries` must be set",
