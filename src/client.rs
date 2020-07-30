@@ -45,29 +45,50 @@ impl Client {
         TopologyBuilder::new(self)
     }
 
-    /// Create a new deploy workflow builder.
-    pub fn deploy_workflow<T: Into<String>>(&mut self, workflow: T) -> DeployWorkflowBuilder<'_> {
-        DeployWorkflowBuilder::new(self, workflow)
+    /// Deploys one or more workflows to Zeebe. Note that this is an atomic call,
+    /// i.e. either all workflows are deployed, or none of them are.
+    pub fn deploy_workflow(&mut self) -> DeployWorkflowBuilder<'_> {
+        DeployWorkflowBuilder::new(self)
     }
 
-    /// Create a new workflow instance builder.
+    /// Creates and starts an instance of the specified workflow.
+    ///
+    /// The workflow definition to use to create the instance can be specified
+    /// either using its unique key (as returned by [`deploy_workflow`]), or using the
+    /// BPMN process ID and a version. Pass -1 as the version to use the latest
+    /// deployed version.
+    ///
+    /// Note that only workflows with none start events can be started through this
+    /// command.
+    ///
+    /// [`deploy_workflow`]: struct.Client.html#fn.deploy_workflow
     pub fn create_workflow_instance(&mut self) -> CreateWorkflowInstanceBuilder<'_> {
         CreateWorkflowInstanceBuilder::new(self)
     }
 
-    /// Create a new workflow instance with result builder.
+    /// Similar to [`create_workflow_instance`], creates and starts an instance of
+    /// the specified workflow.
+    ///
+    /// Unlike [`create_workflow_instance`], the response is returned when the
+    /// workflow is completed.
+    ///
+    /// Note that only workflows with none start events can be started through this
+    /// command.
+    ///
+    /// [`create_workflow_instance`]: struct.Client.html#fn.create_workflow_instance
     pub fn create_workflow_instance_with_result(
         &mut self,
     ) -> CreateWorkflowInstanceWithResultBuilder<'_> {
         CreateWorkflowInstanceWithResultBuilder::new(self)
     }
 
-    /// Create a new cancel workflow instance builder.
+    /// Cancels a running workflow instance.
     pub fn cancel_workflow_instance(&mut self) -> CancelWorkflowInstanceBuilder<'_> {
         CancelWorkflowInstanceBuilder::new(self)
     }
 
-    /// Create a new set variables builder.
+    /// Updates all the variables of a particular scope (e.g. workflow instance,
+    /// flow element instance) from the given JSON document.
     pub fn set_variables(&mut self) -> SetVariablesBuilder<'_> {
         SetVariablesBuilder::new(self)
     }
@@ -85,17 +106,19 @@ impl Client {
 
     /// Marks the job as failed.
     ///
-    /// If the retries argument is positive, then the job will be immediately
+    /// If the `retries` argument is positive, then the job will be immediately
     /// activatable again, and a worker could try again to process it. If it is zero
     /// or negative however, an incident will be raised, tagged with the given
-    /// error_message, and the job will not be activatable until the incident is
+    /// `error_message`, and the job will not be activatable until the incident is
     /// resolved.
     pub fn fail_job(&mut self) -> FailJobBuilder {
         FailJobBuilder::new(self.clone())
     }
 
-    /// Updates the number of retries a job has left. This is mostly useful for jobs
-    /// that have run out of retries, should the underlying problem be solved.
+    /// Updates the number of retries a job has left.
+    ///
+    /// This is mostly useful for jobs that have run out of retries, should the
+    /// underlying problem be solved.
     pub fn update_job_retries(&mut self) -> UpdateJobRetriesBuilder<'_> {
         UpdateJobRetriesBuilder::new(self)
     }
@@ -119,7 +142,7 @@ impl Client {
     ///
     /// This simply marks the incident as resolved; most likely a call to
     /// [`update_job_retries`] or [`update_workload_instance_payload`] will be
-    /// necessary to actually resolve the problem, following by this call.
+    /// necessary to actually resolve the problem, followed by this call.
     ///
     /// [`update_job_retries`]: struct.Client.html#fn.update_job_retries
     /// [`update_workload_instance_payload`]: struct.Client.html#fn.update_workload_instance_payload

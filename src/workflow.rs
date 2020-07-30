@@ -1,6 +1,6 @@
 use crate::{proto, Client, Error, Result};
 use tokio::{fs::File, io::AsyncReadExt};
-use tracing::debug;
+use tracing::{debug, trace};
 
 /// Deploys one or more workflows to Zeebe.
 ///
@@ -9,12 +9,12 @@ use tracing::debug;
 #[derive(Debug)]
 pub struct DeployWorkflowBuilder<'a> {
     client: &'a mut Client,
-    resource_file: String,
+    resource_files: Vec<String>,
     resource_type: WorkflowResourceType,
 }
 
 /// The format of the uploaded workflows.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum WorkflowResourceType {
     /// FILE type means the gateway will try to detect the resource type using the
     /// file extension of the name field
@@ -27,15 +27,31 @@ pub enum WorkflowResourceType {
 
 impl<'a> DeployWorkflowBuilder<'a> {
     /// Create a new deploy workflow builder.
-    pub fn new<T: Into<String>>(client: &'a mut Client, resource_file: T) -> Self {
+    pub fn new(client: &'a mut Client) -> Self {
         DeployWorkflowBuilder {
             client,
-            resource_file: resource_file.into(),
+            resource_files: Vec::new(),
             resource_type: WorkflowResourceType::File,
         }
     }
 
-    /// Set the resource type for these workflows.
+    /// Set a single resource file to upload.
+    pub fn with_resource_file<T: Into<String>>(self, resource_file: T) -> Self {
+        DeployWorkflowBuilder {
+            resource_files: vec![resource_file.into()],
+            ..self
+        }
+    }
+
+    /// Set a list of resource files to uploaded.
+    pub fn with_resource_files(self, resource_files: Vec<String>) -> Self {
+        DeployWorkflowBuilder {
+            resource_files,
+            ..self
+        }
+    }
+
+    /// Set the resource type for the uploaded workflows workflows.
     pub fn with_resource_type(self, resource_type: WorkflowResourceType) -> Self {
         DeployWorkflowBuilder {
             resource_type,
@@ -46,32 +62,35 @@ impl<'a> DeployWorkflowBuilder<'a> {
     /// Submit the workflows to the Zeebe brokers.
     #[tracing::instrument(skip(self), fields(method = "deploy_workflow"))]
     pub async fn send(self) -> Result<DeployWorkflowResponse> {
-        // Read workflow definition
-        let mut file = File::open(&self.resource_file)
-            .await
-            .map_err(|e| Error::FileIo {
-                resource_file: self.resource_file.clone(),
+        // Read workflow definitions
+        trace!(files = ?self.resource_files, resource_type = ?self.resource_type, "reading files");
+        let mut workflows = Vec::with_capacity(self.resource_files.len());
+        for path in self.resource_files.iter() {
+            let mut file = File::open(path).await.map_err(|e| Error::FileIo {
+                resource_file: path.clone(),
                 source: e,
             })?;
-        let mut definition = vec![];
-        file.read_to_end(&mut definition)
-            .await
-            .map_err(|e| Error::FileIo {
-                resource_file: self.resource_file.clone(),
-                source: e,
-            })?;
+            let mut definition = vec![];
+            file.read_to_end(&mut definition)
+                .await
+                .map_err(|e| Error::FileIo {
+                    resource_file: path.clone(),
+                    source: e,
+                })?;
+            workflows.push(proto::WorkflowRequestObject {
+                name: path.clone(),
+                r#type: self.resource_type.clone() as i32,
+                definition,
+            })
+        }
 
-        debug!(file = ?self.resource_file, resource_type = ?self.resource_type, "sending request");
+        debug!(files = ?self.resource_files, resource_type = ?self.resource_type, "sending request");
 
         let res = self
             .client
             .gateway_client
             .deploy_workflow(tonic::Request::new(proto::DeployWorkflowRequest {
-                workflows: vec![proto::WorkflowRequestObject {
-                    name: self.resource_file,
-                    r#type: self.resource_type as i32,
-                    definition,
-                }],
+                workflows,
             }))
             .await?;
         Ok(DeployWorkflowResponse(res.into_inner()))

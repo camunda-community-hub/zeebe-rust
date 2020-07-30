@@ -24,7 +24,8 @@
 //!
 //!     // Deploy a workflow
 //!     client
-//!         .deploy_workflow("order-process.bpmn")
+//!         .deploy_workflow()
+//!         .with_resource_file("examples/workflows/order-process.bpmn")
 //!         .send()
 //!         .await?;
 //!
@@ -104,5 +105,5 @@ pub use workflow::{
     CancelWorkflowInstanceBuilder, CancelWorkflowInstanceResponse, CreateWorkflowInstanceBuilder,
     CreateWorkflowInstanceResponse, CreateWorkflowInstanceWithResultBuilder,
     CreateWorkflowInstanceWithResultResponse, DeployWorkflowBuilder, DeployWorkflowResponse,
-    SetVariablesBuilder, SetVariablesResponse, WorkflowMetadata,
+    SetVariablesBuilder, SetVariablesResponse, WorkflowMetadata, WorkflowResourceType,
 };

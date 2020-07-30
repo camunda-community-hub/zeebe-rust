@@ -13,7 +13,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Deploy a workflow
     client
-        .deploy_workflow("examples/workflows/order-process.bpmn")
+        .deploy_workflow()
+        .with_resource_file("examples/workflows/order-process.bpmn")
         .send()
         .await?;
 
