@@ -167,13 +167,27 @@ impl JobWorkerBuilder {
     ///     result: u32,
     /// }
     ///
+    /// // Async job handler function
+    /// async fn handle_job(client: Client, data: MyJobData) -> Result<MyJobResult, MyError> {
+    ///    Ok(MyJobResult { result: 42 })
+    /// }
+    ///
+    /// // Example use with async function
     /// let job = client
     ///     .job_worker()
     ///     .with_job_type("my-job-type")
-    ///     .with_auto_handler(move |_client: Client, my_job_data: MyJobData| {
+    ///     .with_auto_handler(handle_job)
+    ///     .run()
+    ///     .await?;
+    ///
+    /// // Use with closure
+    /// let job = client
+    ///     .job_worker()
+    ///     .with_job_type("my-job-type")
+    ///     .with_auto_handler(|client: Client, my_job_data: MyJobData| {
     ///         future::ok::<_, MyError>(MyJobResult { result: 42 })
     ///     })
-    ///     .spawn()
+    ///     .run()
     ///     .await?;
     ///
     /// # Ok(())
@@ -233,7 +247,7 @@ impl JobWorkerBuilder {
     }
 
     /// Start the worker as a future. To stop the worker, simply drop the future.
-    pub async fn spawn(self) -> Result<()> {
+    pub async fn run(self) -> Result<()> {
         if self.request.r#type.is_empty() || self.handler.is_none() {
             return Err(Error::InvalidParameters(
                 "`job_type` and `handler` must be set",

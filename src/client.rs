@@ -246,7 +246,7 @@ impl Client {
     ///     .job_worker()
     ///     .with_job_type("my-service")
     ///     .with_handler(handle_job)
-    ///     .spawn()
+    ///     .run()
     ///     .await?;
     ///
     /// // job handler function

@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .job_worker()
         .with_job_type("payment-service")
         .with_handler(handle_job)
-        .spawn()
+        .run()
         .await?;
 
     Ok(())

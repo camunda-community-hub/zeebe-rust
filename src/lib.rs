@@ -43,7 +43,7 @@
 //!         .job_worker()
 //!         .with_job_type("payment-service")
 //!         .with_handler(handle_job)
-//!         .spawn()
+//!         .run()
 //!         .await?;
 //!
 //!     Ok(())
@@ -54,6 +54,66 @@
 //!
 //!     let _ = client.complete_job().with_job_key(job.key()).send().await;
 //! }
+//! ```
+//!
+//! Or with job success and failure reported for you automatically from your
+//! function result:
+//!
+//! ```no_run
+//! use serde::{Deserialize, Serialize};
+//! use thiserror::Error;
+//! use zeebe::Client;
+//! use futures::future;
+//!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let client = Client::new();
+//!
+//! // Given an app-specific error
+//! #[derive(Error, Debug)]
+//! enum MyError {
+//!     #[error("unknown error occurred")]
+//!     Unknown,
+//! }
+//!
+//! // And app-specific job data
+//! #[derive(Deserialize)]
+//! struct MyJobData {
+//!     my_property: String,
+//!     my_other_property: String,
+//! }
+//!
+//! // And app-specific job result
+//! #[derive(Serialize)]
+//! struct MyJobResult {
+//!     result: u32,
+//! }
+//!
+//! // Async job handler function
+//! async fn handle_job(client: Client, data: MyJobData) -> Result<MyJobResult, MyError> {
+//!    Ok(MyJobResult { result: 42 })
+//! }
+//!
+//! // You can run a worker from your function with results auto reported
+//! let job = client
+//!     .job_worker()
+//!     .with_job_type("my-job-type")
+//!     .with_auto_handler(handle_job)
+//!     .run()
+//!     .await?;
+//!
+//! // OR you can run a closure and have the results auto reported
+//! let job = client
+//!     .job_worker()
+//!     .with_job_type("my-job-type")
+//!     .with_auto_handler(|client: Client, my_job_data: MyJobData| {
+//!         future::ok::<_, MyError>(MyJobResult { result: 42 })
+//!     })
+//!     .run()
+//!     .await?;
+//!
+//! # Ok(())
+//! # }
 //! ```
 #![warn(
     missing_debug_implementations,
