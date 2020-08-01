@@ -17,6 +17,7 @@ use tonic::transport::{Channel, ClientTlsConfig};
 #[derive(Clone, Debug)]
 pub struct Client {
     pub(crate) gateway_client: GatewayClient<Channel>,
+    pub(crate) current_job_key: Option<i64>,
 }
 
 impl Default for Client {
@@ -74,6 +75,7 @@ impl Client {
 
         Ok(Client {
             gateway_client: GatewayClient::new(channel),
+            current_job_key: None,
         })
     }
 
