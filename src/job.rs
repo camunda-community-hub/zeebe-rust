@@ -130,11 +130,14 @@ impl CompleteJobBuilder {
     /// Submit the complete job request.
     #[tracing::instrument(skip(self), fields(method = "complete_job"))]
     pub async fn send(mut self) -> Result<CompleteJobResponse> {
-        if self.job_key.is_none() {
+        if self.job_key.is_none() && self.client.current_job_key.is_none() {
             return Err(Error::InvalidParameters("`job_key` must be set"));
         }
         let req = proto::CompleteJobRequest {
-            job_key: self.job_key.unwrap(),
+            job_key: self
+                .job_key
+                .or(self.client.current_job_key.clone())
+                .unwrap(),
             variables: self
                 .variables
                 .map_or(String::new(), |vars| vars.to_string()),
@@ -206,11 +209,14 @@ impl FailJobBuilder {
     /// Submit the fail job request.
     #[tracing::instrument(skip(self), fields(method = "fail_job"))]
     pub async fn send(mut self) -> Result<FailJobResponse> {
-        if self.job_key.is_none() {
+        if self.job_key.is_none() && self.client.current_job_key.is_none() {
             return Err(Error::InvalidParameters("`job_key` must be set"));
         }
         let req = proto::FailJobRequest {
-            job_key: self.job_key.unwrap(),
+            job_key: self
+                .job_key
+                .or(self.client.current_job_key.clone())
+                .unwrap(),
             retries: self.retries.unwrap_or_default() as i32,
             error_message: self.error_message.unwrap_or_default(),
         };
@@ -279,11 +285,14 @@ impl ThrowErrorBuilder {
     /// Submit the throw error request.
     #[tracing::instrument(skip(self), fields(method = "throw_error"))]
     pub async fn send(mut self) -> Result<ThrowErrorResponse> {
-        if self.job_key.is_none() {
+        if self.job_key.is_none() && self.client.current_job_key.is_none() {
             return Err(Error::InvalidParameters("`job_key` must be set"));
         }
         let req = proto::ThrowErrorRequest {
-            job_key: self.job_key.unwrap(),
+            job_key: self
+                .job_key
+                .or(self.client.current_job_key.clone())
+                .unwrap(),
             error_code: self.error_code.unwrap_or_default(),
             error_message: self.error_message.unwrap_or_default(),
         };
@@ -343,13 +352,18 @@ impl UpdateJobRetriesBuilder {
     /// Submit the update job retries request.
     #[tracing::instrument(skip(self), fields(method = "update_job_retries"))]
     pub async fn send(mut self) -> Result<UpdateJobRetriesResponse> {
-        if self.job_key.is_none() || self.retries.is_none() {
+        if (self.job_key.is_none() && self.client.current_job_key.is_none())
+            || self.retries.is_none()
+        {
             return Err(Error::InvalidParameters(
                 "`job_key` and `retries` must be set",
             ));
         }
         let req = proto::UpdateJobRetriesRequest {
-            job_key: self.job_key.unwrap(),
+            job_key: self
+                .job_key
+                .or(self.client.current_job_key.clone())
+                .unwrap(),
             retries: self.retries.unwrap() as i32,
         };
 

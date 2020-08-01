@@ -125,7 +125,8 @@ impl JobWorkerBuilder {
         R: Future<Output = ()> + Send + 'static,
     {
         JobWorkerBuilder {
-            handler: Some(JobHandler(Arc::new(move |client, job| {
+            handler: Some(JobHandler(Arc::new(move |mut client, job| {
+                client.current_job_key = Some(job.key());
                 Box::pin(handler(client, job))
             }))),
             ..self
@@ -202,21 +203,19 @@ impl JobWorkerBuilder {
         T: Serialize,
         J: serde::de::DeserializeOwned,
     {
-        self.with_handler(move |client, job| {
-            let job_key = job.key();
+        self.with_handler(move |mut client, job| {
+            client.current_job_key = Some(job.key());
             match serde_json::from_str(job.variables_str()) {
                 Ok(typed_job) => handler(client.clone(), typed_job)
                     .then(move |result| match result {
                         Ok(variables) => client
                             .complete_job()
-                            .with_job_key(job_key)
                             .with_variables(json!(variables))
                             .send()
                             .map(|_| ())
                             .left_future(),
                         Err(err) => client
                             .fail_job()
-                            .with_job_key(job_key)
                             .with_error_message(err.to_string())
                             .send()
                             .map(|_| ())
@@ -225,7 +224,6 @@ impl JobWorkerBuilder {
                     .left_future(),
                 Err(err) => client
                     .fail_job()
-                    .with_job_key(job_key)
                     .with_error_message(format!(
                         "variables do not deserialize to expected type: {:?}",
                         err
