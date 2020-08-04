@@ -5,7 +5,10 @@ use crate::{
 };
 use futures::StreamExt;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Semaphore};
+use tokio::{
+    sync::{mpsc, Semaphore},
+    task::{spawn_local, LocalSet},
+};
 
 pub(crate) async fn run(
     mut job_queue: mpsc::Receiver<Job>,
@@ -27,15 +30,19 @@ pub(crate) async fn run(
             worker: worker.clone(),
         };
 
-        tokio::spawn(async move {
-            let key = task.job.key();
-            tracing::trace!(worker = ?task.worker, ?key, job = ?task.job, "dispatching job");
-            task.handler.call(task.job_client, task.job).await;
+        let _ = LocalSet::new()
+            .run_until(async {
+                spawn_local(async move {
+                    let key = task.job.key();
+                    tracing::trace!(worker = ?task.worker, ?key, job = ?task.job, "dispatching job");
+                    task.handler.call(task.job_client, task.job).await;
 
-            tracing::trace!(worker = ?task.worker, ?key, "job completed");
-            let _ = task.poll_queue.send(PollMessage::JobFinished).await;
-            job_slot
-        });
+                    tracing::trace!(worker = ?task.worker, ?key, "job completed");
+                    let _ = task.poll_queue.send(PollMessage::JobFinished).await;
+                    job_slot
+                }).await
+            })
+            .await;
     }
 }
 
