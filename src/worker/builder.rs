@@ -3,7 +3,7 @@ use crate::error::{Error, Result};
 use crate::job::Job;
 use crate::proto;
 use crate::worker::{job_dispatcher, JobPoller, PollMessage};
-use futures::future::BoxFuture;
+use futures::future::LocalBoxFuture;
 use futures::{FutureExt, StreamExt};
 use serde::Serialize;
 use serde_json::json;
@@ -24,10 +24,10 @@ static REQUEST_TIMEOUT_OFFSET: Duration = Duration::from_secs(10);
 static DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
-pub(crate) struct JobHandler(Arc<dyn Fn(Client, Job) -> BoxFuture<'static, ()> + Send + Sync>);
+pub(crate) struct JobHandler(Arc<dyn Fn(Client, Job) -> LocalBoxFuture<'static, ()>>);
 
 impl JobHandler {
-    pub(crate) fn call(&self, client: Client, job: Job) -> BoxFuture<'static, ()> {
+    pub(crate) fn call(&self, client: Client, job: Job) -> LocalBoxFuture<'static, ()> {
         self.0(client, job)
     }
 }
@@ -121,8 +121,8 @@ impl JobWorkerBuilder {
     /// Set the handler function for the worker.
     pub fn with_handler<T, R>(self, handler: T) -> Self
     where
-        T: Fn(Client, Job) -> R + Send + Sync + 'static,
-        R: Future<Output = ()> + Send + 'static,
+        T: Fn(Client, Job) -> R + 'static,
+        R: Future<Output = ()> + 'static,
     {
         JobWorkerBuilder {
             handler: Some(JobHandler(Arc::new(move |mut client, job| {
@@ -197,8 +197,8 @@ impl JobWorkerBuilder {
     /// ```
     pub fn with_auto_handler<F, R, E, T, J>(self, handler: F) -> Self
     where
-        F: Fn(Client, J) -> R + Send + Sync + 'static,
-        R: Future<Output = std::result::Result<T, E>> + Send + 'static,
+        F: Fn(Client, J) -> R + 'static,
+        R: Future<Output = std::result::Result<T, E>> + 'static,
         E: std::error::Error,
         T: Serialize,
         J: serde::de::DeserializeOwned,
