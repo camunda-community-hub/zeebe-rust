@@ -1,6 +1,6 @@
 [package]
 name = "zeebe"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Julian Tescher <julian@outtherelabs.com>"]
 description = """
 A rust client for defining, orchestrating, and monitoring business processes across microservices 
@@ -9,7 +9,7 @@ using Zeebe.
 homepage = "https://github.com/OutThereLabs/zeebe-rust"
 repository = "https://github.com/OutThereLabs/zeebe-rust"
 readme = "README.md"
-categories = ["asynchronous"]
+categories = ["asynchronous", "api-bindings"]
 keywords = ["zeebe", "job", "queue", "async", "microservices"]
 license = "MIT"
 edition = "2018"
