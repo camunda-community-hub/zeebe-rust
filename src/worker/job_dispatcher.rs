@@ -1,9 +1,10 @@
 use crate::{
     client::Client,
     job::Job,
-    worker::{builder::JobHandler, PollMessage},
+    worker::{auto_handler::Extensions, builder::JobHandler, PollMessage},
 };
 use futures::StreamExt;
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::{
     sync::{mpsc, Semaphore},
@@ -17,8 +18,10 @@ pub(crate) async fn run(
     handler: JobHandler,
     job_client: Client,
     worker: String,
+    job_extensions: Extensions,
 ) {
     let concurrent_jobs = Arc::new(Semaphore::new(concurrency));
+    let per_job_extensions = Rc::new(job_extensions);
 
     while let Some(job) = job_queue.next().await {
         let job_slot = concurrent_jobs.clone().acquire_owned().await;
@@ -28,12 +31,16 @@ pub(crate) async fn run(
             poll_queue: poll_queue.clone(),
             handler: handler.clone(),
             worker: worker.clone(),
+            extensions: per_job_extensions.clone(),
         };
 
         let _ = LocalSet::new()
             .run_until(async {
                 spawn_local(async move {
                     let key = task.job.key();
+                    task.job_client.current_job_key = Some(key);
+                    task.job_client.current_job_extensions = Some(task.extensions.clone());
+
                     tracing::trace!(worker = ?task.worker, ?key, job = ?task.job, "dispatching job");
                     task.handler.call(task.job_client, task.job).await;
 
@@ -52,4 +59,5 @@ struct JobTask {
     poll_queue: mpsc::Sender<PollMessage>,
     handler: JobHandler,
     worker: String,
+    extensions: Rc<Extensions>,
 }

@@ -65,4 +65,10 @@ pub enum Error {
     /// Invalid method parameters
     #[error("Invalid parameters: {0}")]
     InvalidParameters(&'static str),
+    /// Job payload deserialization error
+    #[error("Cannot deserialize variables to expected type: {0}")]
+    DeserializationError(#[from] serde_json::Error),
+    /// Missing worker state configuration
+    #[error("Worker state is not configured, use `JobWorkerBuilder::with_state` while building worker for this job")]
+    MissingWorkerStateConfig,
 }

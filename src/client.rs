@@ -4,13 +4,14 @@ use crate::{
     proto::gateway_client::GatewayClient,
     topology::TopologyBuilder,
     util::{PublishMessageBuilder, ResolveIncidentBuilder},
-    worker::JobWorkerBuilder,
+    worker::{auto_handler::Extensions, JobWorkerBuilder},
     workflow::{
         CancelWorkflowInstanceBuilder, CreateWorkflowInstanceBuilder,
         CreateWorkflowInstanceWithResultBuilder, DeployWorkflowBuilder, SetVariablesBuilder,
     },
 };
 use std::fmt::Debug;
+use std::rc::Rc;
 use tonic::transport::{Channel, ClientTlsConfig};
 
 /// Client used to communicate with Zeebe.
@@ -18,6 +19,7 @@ use tonic::transport::{Channel, ClientTlsConfig};
 pub struct Client {
     pub(crate) gateway_client: GatewayClient<Channel>,
     pub(crate) current_job_key: Option<i64>,
+    pub(crate) current_job_extensions: Option<Rc<Extensions>>,
 }
 
 impl Default for Client {
@@ -76,6 +78,7 @@ impl Client {
         Ok(Client {
             gateway_client: GatewayClient::new(channel),
             current_job_key: None,
+            current_job_extensions: None,
         })
     }
 

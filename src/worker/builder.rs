@@ -2,7 +2,10 @@ use crate::client::Client;
 use crate::error::{Error, Result};
 use crate::job::Job;
 use crate::proto;
-use crate::worker::{job_dispatcher, JobPoller, PollMessage};
+use crate::worker::{
+    auto_handler::{Extensions, FromJob, HandlerFactory, State},
+    job_dispatcher, JobPoller, PollMessage,
+};
 use futures::future::LocalBoxFuture;
 use futures::{FutureExt, StreamExt};
 use serde::Serialize;
@@ -15,7 +18,6 @@ use tokio::{sync::mpsc, time::interval};
 
 static DEFAULT_JOB_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 static DEFAULT_JOB_TIMEOUT_IN_MS: i64 = DEFAULT_JOB_TIMEOUT.as_millis() as i64;
-
 static DEFAULT_JOB_WORKER_MAX_JOB_ACTIVE: u32 = 32;
 static DEFAULT_JOB_WORKER_CONCURRENCY: u32 = 4;
 static DEFAULT_JOB_WORKER_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -43,6 +45,7 @@ impl fmt::Debug for JobHandler {
 pub struct JobWorkerBuilder {
     client: Client,
     handler: Option<JobHandler>,
+    data: Extensions,
     concurrency: u32,
     poll_interval: Duration,
     poll_threshold: f32,
@@ -56,6 +59,7 @@ impl JobWorkerBuilder {
         JobWorkerBuilder {
             client,
             handler: None,
+            data: Extensions::new(),
             concurrency: DEFAULT_JOB_WORKER_CONCURRENCY,
             poll_interval: DEFAULT_JOB_WORKER_POLL_INTERVAL,
             poll_threshold: DEFAULT_JOB_WORKER_POLL_THRESHOLD,
@@ -141,7 +145,7 @@ impl JobWorkerBuilder {
     /// ```no_run
     /// use serde::{Deserialize, Serialize};
     /// use thiserror::Error;
-    /// use zeebe::Client;
+    /// use zeebe::{Client, Data};
     /// use futures::future;
     ///
     /// # #[tokio::main]
@@ -169,7 +173,7 @@ impl JobWorkerBuilder {
     /// }
     ///
     /// // Async job handler function
-    /// async fn handle_job(client: Client, data: MyJobData) -> Result<MyJobResult, MyError> {
+    /// async fn handle_job(client: Client, data: Data<MyJobData>) -> Result<MyJobResult, MyError> {
     ///    Ok(MyJobResult { result: 42 })
     /// }
     ///
@@ -185,7 +189,7 @@ impl JobWorkerBuilder {
     /// let job = client
     ///     .job_worker()
     ///     .with_job_type("my-job-type")
-    ///     .with_auto_handler(|client: Client, my_job_data: MyJobData| {
+    ///     .with_auto_handler(|client: Client, my_job_data: Data<MyJobData>| {
     ///         future::ok::<_, MyError>(MyJobResult { result: 42 })
     ///     })
     ///     .run()
@@ -195,44 +199,92 @@ impl JobWorkerBuilder {
     /// # }
     ///
     /// ```
-    pub fn with_auto_handler<F, R, E, T, J>(self, handler: F) -> Self
+    pub fn with_auto_handler<F, T, R, O, E>(self, handler: F) -> Self
     where
-        F: Fn(Client, J) -> R + 'static,
-        R: Future<Output = std::result::Result<T, E>> + 'static,
+        F: HandlerFactory<T, R, O, E>,
+        T: FromJob,
+        R: Future<Output = std::result::Result<O, E>> + 'static,
+        O: Serialize,
         E: std::error::Error,
-        T: Serialize,
-        J: serde::de::DeserializeOwned,
     {
-        self.with_handler(move |mut client, job| {
-            client.current_job_key = Some(job.key());
-            match serde_json::from_str(job.variables_str()) {
-                Ok(typed_job) => handler(client.clone(), typed_job)
-                    .then(move |result| match result {
-                        Ok(variables) => client
-                            .complete_job()
-                            .with_variables(json!(variables))
-                            .send()
-                            .map(|_| ())
-                            .left_future(),
-                        Err(err) => client
-                            .fail_job()
-                            .with_error_message(err.to_string())
-                            .send()
-                            .map(|_| ())
-                            .right_future(),
-                    })
-                    .left_future(),
-                Err(err) => client
-                    .fail_job()
-                    .with_error_message(format!(
-                        "variables do not deserialize to expected type: {:?}",
-                        err
-                    ))
-                    .send()
-                    .map(|_| ())
-                    .right_future(),
-            }
+        self.with_handler(move |client, job| match T::from_job(&client, &job) {
+            Ok(params) => handler
+                .call(params)
+                .then(move |result| match result {
+                    Ok(variables) => client
+                        .complete_job()
+                        .with_variables(json!(variables))
+                        .send()
+                        .map(|_| ())
+                        .left_future(),
+                    Err(err) => client
+                        .fail_job()
+                        .with_error_message(err.to_string())
+                        .send()
+                        .map(|_| ())
+                        .right_future(),
+                })
+                .left_future(),
+            Err(err) => client
+                .fail_job()
+                .with_error_message(format!(
+                    "variables do not deserialize to expected type: {:?}",
+                    err
+                ))
+                .send()
+                .map(|_| ())
+                .right_future(),
         })
+    }
+
+    /// Set state to be persisted across job [`auto handler`] invocations.
+    ///
+    /// [`auto handler`]: struct.JobWorkerBuilder.html#method.with_auto_handler
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use futures::future;
+    /// use serde::Serialize;
+    /// use std::cell::Cell;
+    /// use thiserror::Error;
+    /// use zeebe::{Client, State};
+    ///
+    /// #[derive(Error, Debug)]
+    /// enum MyError {}
+    ///
+    /// #[derive(Serialize)]
+    /// struct MyJobResult {
+    ///     result: u32,
+    /// }
+    ///
+    /// struct MyJobState {
+    ///     total: Cell<u32>,
+    /// }
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = Client::default();
+    ///
+    /// let job_state = MyJobState {
+    ///     total: Cell::new(0),
+    /// };
+    ///
+    /// let _job = client
+    ///     .job_worker()
+    ///     .with_job_type("my-job-type")
+    ///     .with_auto_handler(|my_job_state: State<MyJobState>| {
+    ///         future::ok::<_, MyError>(MyJobResult { result: 42 })
+    ///     })
+    ///     .with_state(job_state)
+    ///     .run()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_state<T: 'static>(mut self, t: T) -> Self {
+        self.data.insert(State::new(t));
+        self
     }
 
     /// Set the list of variables to fetch as the job variables.
@@ -280,6 +332,7 @@ impl JobWorkerBuilder {
                 self.handler.unwrap(),
                 self.client.clone(),
                 worker_name,
+                self.data,
             )
         );
 
