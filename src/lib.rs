@@ -60,10 +60,10 @@
 //! function result:
 //!
 //! ```no_run
+//! use futures::future;
 //! use serde::{Deserialize, Serialize};
 //! use thiserror::Error;
-//! use zeebe::Client;
-//! use futures::future;
+//! use zeebe::{Client, Data};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -90,7 +90,7 @@
 //! }
 //!
 //! // Async job handler function
-//! async fn handle_job(client: Client, data: MyJobData) -> Result<MyJobResult, MyError> {
+//! async fn handle_job(data: Data<MyJobData>) -> Result<MyJobResult, MyError> {
 //!    Ok(MyJobResult { result: 42 })
 //! }
 //!
@@ -106,7 +106,7 @@
 //! let job = client
 //!     .job_worker()
 //!     .with_job_type("my-job-type")
-//!     .with_auto_handler(|client: Client, my_job_data: MyJobData| {
+//!     .with_auto_handler(|my_job_data: Data<MyJobData>| {
 //!         future::ok::<_, MyError>(MyJobResult { result: 42 })
 //!     })
 //!     .run()
@@ -160,7 +160,7 @@ pub use topology::{BrokerInfo, Partition, TopologyBuilder, TopologyResponse};
 pub use util::{
     PublishMessageBuilder, PublishMessageResponse, ResolveIncidentBuilder, ResolveIncidentResponse,
 };
-pub use worker::JobWorkerBuilder;
+pub use worker::{Data, JobWorkerBuilder, State};
 pub use workflow::{
     CancelWorkflowInstanceBuilder, CancelWorkflowInstanceResponse, CreateWorkflowInstanceBuilder,
     CreateWorkflowInstanceResponse, CreateWorkflowInstanceWithResultBuilder,
