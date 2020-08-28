@@ -1,5 +1,5 @@
 use crate::{client::Client, proto, Error, Result};
-use tracing::debug;
+use tracing::{debug, trace};
 
 /// An activate Zeebe job that is ready to be worked on by a worker.
 #[derive(Clone, Debug)]
@@ -134,16 +134,14 @@ impl CompleteJobBuilder {
             return Err(Error::InvalidParameters("`job_key` must be set"));
         }
         let req = proto::CompleteJobRequest {
-            job_key: self
-                .job_key
-                .or(self.client.current_job_key.clone())
-                .unwrap(),
+            job_key: self.job_key.or(self.client.current_job_key).unwrap(),
             variables: self
                 .variables
                 .map_or(String::new(), |vars| vars.to_string()),
         };
 
-        debug!(?req, "sending request:");
+        debug!(job_key = req.job_key, "completing job:");
+        trace!(?req, "request:");
         let res = self
             .client
             .gateway_client
@@ -213,15 +211,13 @@ impl FailJobBuilder {
             return Err(Error::InvalidParameters("`job_key` must be set"));
         }
         let req = proto::FailJobRequest {
-            job_key: self
-                .job_key
-                .or(self.client.current_job_key.clone())
-                .unwrap(),
+            job_key: self.job_key.or(self.client.current_job_key).unwrap(),
             retries: self.retries.unwrap_or_default() as i32,
             error_message: self.error_message.unwrap_or_default(),
         };
 
-        debug!(?req, "sending request:");
+        debug!(job_key = req.job_key, "failing job:");
+        trace!(?req, "request:");
         let res = self
             .client
             .gateway_client
@@ -289,10 +285,7 @@ impl ThrowErrorBuilder {
             return Err(Error::InvalidParameters("`job_key` must be set"));
         }
         let req = proto::ThrowErrorRequest {
-            job_key: self
-                .job_key
-                .or(self.client.current_job_key.clone())
-                .unwrap(),
+            job_key: self.job_key.or(self.client.current_job_key).unwrap(),
             error_code: self.error_code.unwrap_or_default(),
             error_message: self.error_message.unwrap_or_default(),
         };
@@ -360,10 +353,7 @@ impl UpdateJobRetriesBuilder {
             ));
         }
         let req = proto::UpdateJobRetriesRequest {
-            job_key: self
-                .job_key
-                .or(self.client.current_job_key.clone())
-                .unwrap(),
+            job_key: self.job_key.or(self.client.current_job_key).unwrap(),
             retries: self.retries.unwrap() as i32,
         };
 
