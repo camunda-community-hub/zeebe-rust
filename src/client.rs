@@ -12,7 +12,11 @@ use crate::{
 };
 use std::fmt::Debug;
 use std::rc::Rc;
+use std::time::Duration;
 use tonic::transport::{Channel, ClientTlsConfig};
+
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+const DEFAULT_KEEP_ALIVE: Duration = Duration::from_secs(45);
 
 /// Client used to communicate with Zeebe.
 #[derive(Clone, Debug)]
@@ -434,10 +438,16 @@ impl Client {
         let endpoints = endpoints
             .into_iter()
             .map(|uri| {
-                Channel::from_shared(uri.clone()).map_err(|err| Error::InvalidGatewayUri {
-                    uri,
-                    message: err.to_string(),
-                })
+                Channel::from_shared(uri.clone())
+                    .map_err(|err| Error::InvalidGatewayUri {
+                        uri,
+                        message: err.to_string(),
+                    })
+                    .map(|channel| {
+                        channel
+                            .timeout(DEFAULT_REQUEST_TIMEOUT)
+                            .keep_alive_timeout(DEFAULT_KEEP_ALIVE)
+                    })
             })
             .map(|c| {
                 c.and_then(|c| match &tls {
