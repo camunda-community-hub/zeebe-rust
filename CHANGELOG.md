@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.2.1](https://github.com/OutThereLabs/zeebe-rust/compare/v0.2.0...v0.2.1)
+
+### Changed
+
+- Update default request and long polling timeouts (#4)
+- Add tracing instrumentation to auto handlers (#5)
+
 ## [v0.2.0](https://github.com/OutThereLabs/zeebe-rust/compare/v0.1.2...v0.2.0)
 
 ### Changed
