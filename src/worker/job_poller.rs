@@ -3,11 +3,18 @@ use futures::{
     future::{FutureExt, TryFutureExt},
     stream::{BoxStream, StreamExt},
 };
+use std::cmp::min;
 use std::fmt;
 use std::future::Future;
 use std::time::Duration;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::codegen::{Context, Pin, Poll};
+use tonic::Code;
+
+const LONG_POLLING_MAX_DURATION: Duration = Duration::from_secs(10);
+const LONG_POLLING_OFFSET_PERCENT: f32 = 0.1;
+
+const TIMEOUT_ERROR: &str = "transport error: request timed out";
 
 pub(crate) struct JobPoller {
     pub(crate) client: Client,
@@ -43,6 +50,7 @@ impl JobPoller {
 
     fn activate_jobs(&mut self) {
         self.request.max_jobs_to_activate = (self.max_jobs_active - self.remaining) as i32;
+        self.request.request_timeout = get_long_polling_millis(self.request_timeout);
         let mut job_queue = self.job_queue.clone();
         let mut poll_queue = self.message_sender.clone();
         let mut retry_queue = self.message_sender.clone();
@@ -53,13 +61,18 @@ impl JobPoller {
 
         tokio::spawn(
             timeout(self.request_timeout, async move {
-                tracing::trace!(?worker, "fetching new jobs");
+                tracing::debug!(?worker, "Activating new jobs");
+                tracing::trace!(?worker, method="activate_jobs", req = ?request, "sending");
 
                 if let Ok(mut stream) = gateway_client
                     .activate_jobs(tonic::Request::new(request))
                     .map_ok(|response| response.into_inner())
                     .map_err(|err| {
-                        tracing::error!(?worker, ?err, "Failed to fetch new jobs");
+                        // Timeout is not an error when long polling.
+                        // Resource exhausted is normal part of backpressure, poller will retry
+                        if err.message() != TIMEOUT_ERROR && err.code() != Code::ResourceExhausted {
+                            tracing::error!(?worker, ?err, "Failed to activate jobs for worker");
+                        }
                     })
                     .await
                 {
@@ -126,4 +139,13 @@ impl Future for JobPoller {
             }
         }
     }
+}
+
+fn get_long_polling_millis(timeout: Duration) -> i64 {
+    let long_poll_duration = timeout
+        - min(
+            timeout.mul_f32(LONG_POLLING_OFFSET_PERCENT),
+            LONG_POLLING_MAX_DURATION,
+        );
+    long_poll_duration.as_millis() as i64
 }

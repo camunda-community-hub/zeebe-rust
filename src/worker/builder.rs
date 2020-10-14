@@ -310,7 +310,7 @@ impl JobWorkerBuilder {
         let worker_name = self.request.worker.clone();
         let job_poller = JobPoller {
             client: self.client.clone(),
-            request_timeout: Duration::from_millis(self.request.request_timeout as u64),
+            request_timeout: self.request_timeout,
             request_in_progress: false,
             max_jobs_active: self.request.max_jobs_to_activate as u32,
             job_queue,
