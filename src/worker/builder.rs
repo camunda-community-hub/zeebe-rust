@@ -15,6 +15,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::{sync::mpsc, time::interval};
+use tracing_futures::Instrument;
 
 static DEFAULT_JOB_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 static DEFAULT_JOB_TIMEOUT_IN_MS: i64 = DEFAULT_JOB_TIMEOUT.as_millis() as i64;
@@ -207,33 +208,42 @@ impl JobWorkerBuilder {
         O: Serialize,
         E: std::error::Error,
     {
-        self.with_handler(move |client, job| match T::from_job(&client, &job) {
-            Ok(params) => handler
-                .call(params)
-                .then(move |result| match result {
-                    Ok(variables) => client
-                        .complete_job()
-                        .with_variables(json!(variables))
-                        .send()
-                        .map(|_| ())
-                        .left_future(),
-                    Err(err) => client
-                        .fail_job()
-                        .with_error_message(err.to_string())
-                        .send()
-                        .map(|_| ())
-                        .right_future(),
-                })
-                .left_future(),
-            Err(err) => client
-                .fail_job()
-                .with_error_message(format!(
-                    "variables do not deserialize to expected type: {:?}",
-                    err
-                ))
-                .send()
-                .map(|_| ())
-                .right_future(),
+        self.with_handler(move |client, job| {
+            let span = tracing::info_span!(
+                "auto_handler",
+                instance = job.workflow_instance_key(),
+                job = job.key(),
+            );
+            match T::from_job(&client, &job) {
+                Ok(params) => handler
+                    .call(params)
+                    .then(move |result| match result {
+                        Ok(variables) => client
+                            .complete_job()
+                            .with_variables(json!(variables))
+                            .send()
+                            .map(|_| ())
+                            .left_future(),
+                        Err(err) => client
+                            .fail_job()
+                            .with_error_message(err.to_string())
+                            .send()
+                            .map(|_| ())
+                            .right_future(),
+                    })
+                    .left_future()
+                    .instrument(span),
+                Err(err) => client
+                    .fail_job()
+                    .with_error_message(format!(
+                        "variables do not deserialize to expected type: {:?}",
+                        err
+                    ))
+                    .send()
+                    .map(|_| ())
+                    .right_future()
+                    .instrument(span),
+            }
         })
     }
 

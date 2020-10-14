@@ -1,5 +1,5 @@
 use crate::{client::Client, proto, Error, Result};
-use tracing::debug;
+use tracing::{debug, trace};
 
 /// Configuration to publish a message.
 #[derive(Debug)]
@@ -82,7 +82,8 @@ impl PublishMessageBuilder {
                 .map_or(String::new(), |vars| vars.to_string()),
         };
 
-        debug!(?req, "sending request:");
+        debug!(name = ?req.name, "publishing message:");
+        trace!(?req, "request:");
         let res = self
             .client
             .gateway_client
