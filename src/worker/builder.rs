@@ -7,7 +7,7 @@ use crate::worker::{
     job_dispatcher, JobPoller, PollMessage,
 };
 use futures::future::LocalBoxFuture;
-use futures::{FutureExt, StreamExt};
+use futures::FutureExt;
 use serde::Serialize;
 use serde_json::json;
 use std::fmt;
@@ -15,6 +15,10 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::{sync::mpsc, time::interval};
+use tokio_stream::{
+    wrappers::{IntervalStream, ReceiverStream},
+    StreamExt,
+};
 use tracing_futures::Instrument;
 
 static DEFAULT_JOB_TIMEOUT: Duration = Duration::from_secs(5 * 60);
@@ -208,9 +212,11 @@ impl JobWorkerBuilder {
         O: Serialize,
         E: std::error::Error,
     {
+        let job_type = self.request.r#type.clone();
         self.with_handler(move |client, job| {
             let span = tracing::info_span!(
                 "auto_handler",
+                otel.name = %job_type,
                 instance = job.workflow_instance_key(),
                 job = job.key(),
             );
@@ -233,16 +239,21 @@ impl JobWorkerBuilder {
                     })
                     .left_future()
                     .instrument(span),
-                Err(err) => client
-                    .fail_job()
-                    .with_error_message(format!(
-                        "variables do not deserialize to expected type: {:?}",
-                        err
-                    ))
-                    .send()
-                    .map(|_| ())
-                    .right_future()
-                    .instrument(span),
+                Err(err) => {
+                    span.in_scope(|| {
+                        tracing::error!(%err, "variables do not deserialize to expected type");
+                    });
+                    client
+                        .fail_job()
+                        .with_error_message(format!(
+                            "variables do not deserialize to expected type: {:?}",
+                            err
+                        ))
+                        .send()
+                        .map(|_| ())
+                        .right_future()
+                        .instrument(span)
+                }
             }
         })
     }
@@ -316,7 +327,8 @@ impl JobWorkerBuilder {
 
         let (job_queue, job_queue_rx) = mpsc::channel(self.request.max_jobs_to_activate as usize);
         let (poll_queue, poll_rx) = mpsc::channel(32);
-        let poll_interval = interval(self.poll_interval).map(|_| PollMessage::FetchJobs);
+        let poll_interval =
+            IntervalStream::new(interval(self.poll_interval)).map(|_| PollMessage::FetchJobs);
         let worker_name = self.request.worker.clone();
         let job_poller = JobPoller {
             client: self.client.clone(),
@@ -325,7 +337,10 @@ impl JobWorkerBuilder {
             max_jobs_active: self.request.max_jobs_to_activate as u32,
             job_queue,
             message_sender: poll_queue.clone(),
-            messages: Box::pin(futures::stream::select(poll_rx, poll_interval)),
+            messages: Box::pin(futures::stream::select(
+                ReceiverStream::new(poll_rx),
+                poll_interval,
+            )),
             remaining: 0,
             threshold: (self.request.max_jobs_to_activate as f32 * self.poll_threshold).floor()
                 as u32,

@@ -51,9 +51,9 @@ impl JobPoller {
     fn activate_jobs(&mut self) {
         self.request.max_jobs_to_activate = (self.max_jobs_active - self.remaining) as i32;
         self.request.request_timeout = get_long_polling_millis(self.request_timeout);
-        let mut job_queue = self.job_queue.clone();
-        let mut poll_queue = self.message_sender.clone();
-        let mut retry_queue = self.message_sender.clone();
+        let job_queue = self.job_queue.clone();
+        let poll_queue = self.message_sender.clone();
+        let retry_queue = self.message_sender.clone();
         let worker = self.request.worker.clone();
         let retry_worker = self.request.worker.clone();
         let mut gateway_client = self.client.gateway_client.clone();
