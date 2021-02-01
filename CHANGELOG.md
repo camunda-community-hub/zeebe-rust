@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.3.0](https://github.com/OutThereLabs/zeebe-rust/compare/v0.2.1...v0.3.0)
+
+### Changed
+
+- Update to tonic 0.4 and tokio 1.0 #12
+
 ## [v0.2.1](https://github.com/OutThereLabs/zeebe-rust/compare/v0.2.0...v0.2.1)
 
 ### Changed
