@@ -3,7 +3,6 @@ use crate::{
     job::Job,
     worker::{auto_handler::Extensions, builder::JobHandler, PollMessage},
 };
-use futures::StreamExt;
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::{
@@ -23,7 +22,7 @@ pub(crate) async fn run(
     let concurrent_jobs = Arc::new(Semaphore::new(concurrency));
     let per_job_extensions = Rc::new(job_extensions);
 
-    while let Some(job) = job_queue.next().await {
+    while let Some(job) = job_queue.recv().await {
         let job_slot = concurrent_jobs.clone().acquire_owned().await;
         let mut task = JobTask {
             job,

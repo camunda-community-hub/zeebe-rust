@@ -12,7 +12,7 @@ impl TopologyBuilder {
     }
 
     /// Send a topology request to the configured gateway.
-    #[tracing::instrument(skip(self), fields(method = "topology"))]
+    #[tracing::instrument(skip(self), name = "topology")]
     pub async fn send(mut self) -> Result<TopologyResponse> {
         let req = proto::TopologyRequest {};
         debug!(?req, "sending request");
@@ -109,5 +109,10 @@ impl Partition {
     /// The role of the broker for this partition.
     pub fn role(&self) -> i32 {
         self.0.role
+    }
+
+    /// The health of this partition
+    pub fn health(&self) -> i32 {
+        self.0.health
     }
 }

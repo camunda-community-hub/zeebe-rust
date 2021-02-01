@@ -22,6 +22,7 @@ pub enum WorkflowResourceType {
     /// extension 'bpmn'
     Bpmn = 1,
     /// extension 'yaml'
+    #[deprecated]
     Yaml = 2,
 }
 
@@ -52,6 +53,9 @@ impl DeployWorkflowBuilder {
     }
 
     /// Set the resource type for the uploaded workflows workflows.
+    #[deprecated(
+        note = "As of Zeebe 1.0, YAML support was removed and BPMN is the only supported resource type."
+    )]
     pub fn with_resource_type(self, resource_type: WorkflowResourceType) -> Self {
         DeployWorkflowBuilder {
             resource_type,
@@ -60,7 +64,7 @@ impl DeployWorkflowBuilder {
     }
 
     /// Submit the workflows to the Zeebe brokers.
-    #[tracing::instrument(skip(self), fields(method = "deploy_workflow"))]
+    #[tracing::instrument(skip(self), name = "deploy_workflow")]
     pub async fn send(mut self) -> Result<DeployWorkflowResponse> {
         // Read workflow definitions
         trace!(files = ?self.resource_files, resource_type = ?self.resource_type, "reading files");
@@ -77,6 +81,7 @@ impl DeployWorkflowBuilder {
                     resource_file: path.clone(),
                     source: e,
                 })?;
+            #[allow(deprecated)]
             workflows.push(proto::WorkflowRequestObject {
                 name: path.clone(),
                 r#type: self.resource_type.clone() as i32,
@@ -227,7 +232,7 @@ impl CreateWorkflowInstanceBuilder {
     }
 
     /// Submit this workflow instance to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), fields(method = "create_workflow_instance"))]
+    #[tracing::instrument(skip(self), name = "create_workflow_instance")]
     pub async fn send(mut self) -> Result<CreateWorkflowInstanceResponse> {
         if self.workflow_key.is_none() && self.bpmn_process_id.is_none() {
             return Err(Error::InvalidParameters(
@@ -392,7 +397,7 @@ impl CreateWorkflowInstanceWithResultBuilder {
     }
 
     /// Submit this workflow instance to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), fields(method = "create_workflow_instance_with_result"))]
+    #[tracing::instrument(skip(self), name = "create_workflow_instance_with_result")]
     pub async fn send(mut self) -> Result<CreateWorkflowInstanceWithResultResponse> {
         if self.workflow_key.is_none() && self.bpmn_process_id.is_none() {
             return Err(Error::InvalidParameters(
@@ -499,7 +504,7 @@ impl CancelWorkflowInstanceBuilder {
     }
 
     /// Submit this cancel workflow instance request to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), fields(method = "cancel_workflow_instance"))]
+    #[tracing::instrument(skip(self), name = "cancel_workflow_instance")]
     pub async fn send(mut self) -> Result<CancelWorkflowInstanceResponse> {
         if self.workflow_instance_key.is_none() {
             return Err(Error::InvalidParameters(
@@ -598,7 +603,7 @@ impl SetVariablesBuilder {
     }
 
     /// Submit this set variables request to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), fields(method = "set_variables"))]
+    #[tracing::instrument(skip(self), name = "set_variables")]
     pub async fn send(mut self) -> Result<SetVariablesResponse> {
         if self.element_instance_key.is_none() {
             return Err(Error::InvalidParameters(

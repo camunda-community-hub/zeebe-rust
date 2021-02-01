@@ -128,7 +128,7 @@ impl CompleteJobBuilder {
     }
 
     /// Submit the complete job request.
-    #[tracing::instrument(skip(self), fields(method = "complete_job"))]
+    #[tracing::instrument(skip(self), name = "complete_job")]
     pub async fn send(mut self) -> Result<CompleteJobResponse> {
         if self.job_key.is_none() && self.client.current_job_key.is_none() {
             return Err(Error::InvalidParameters("`job_key` must be set"));
@@ -205,7 +205,7 @@ impl FailJobBuilder {
     }
 
     /// Submit the fail job request.
-    #[tracing::instrument(skip(self), fields(method = "fail_job"))]
+    #[tracing::instrument(skip(self), name = "fail_job")]
     pub async fn send(mut self) -> Result<FailJobResponse> {
         if self.job_key.is_none() && self.client.current_job_key.is_none() {
             return Err(Error::InvalidParameters("`job_key` must be set"));
@@ -279,7 +279,7 @@ impl ThrowErrorBuilder {
     }
 
     /// Submit the throw error request.
-    #[tracing::instrument(skip(self), fields(method = "throw_error"))]
+    #[tracing::instrument(skip(self), name = "throw_error")]
     pub async fn send(mut self) -> Result<ThrowErrorResponse> {
         if self.job_key.is_none() && self.client.current_job_key.is_none() {
             return Err(Error::InvalidParameters("`job_key` must be set"));
@@ -343,7 +343,7 @@ impl UpdateJobRetriesBuilder {
     }
 
     /// Submit the update job retries request.
-    #[tracing::instrument(skip(self), fields(method = "update_job_retries"))]
+    #[tracing::instrument(skip(self), name = "update_job_retries")]
     pub async fn send(mut self) -> Result<UpdateJobRetriesResponse> {
         if (self.job_key.is_none() && self.client.current_job_key.is_none())
             || self.retries.is_none()

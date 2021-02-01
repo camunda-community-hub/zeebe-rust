@@ -67,7 +67,7 @@ impl PublishMessageBuilder {
     }
 
     /// Submit the publish message request.
-    #[tracing::instrument(skip(self), fields(method = "publish_message"))]
+    #[tracing::instrument(skip(self), name = "publish_message")]
     pub async fn send(mut self) -> Result<PublishMessageResponse> {
         if self.name.is_none() {
             return Err(Error::InvalidParameters("`name` must be set"));
@@ -98,6 +98,13 @@ impl PublishMessageBuilder {
 #[derive(Debug)]
 pub struct PublishMessageResponse(proto::PublishMessageResponse);
 
+impl PublishMessageResponse {
+    /// The unique ID of the message that was published
+    pub fn key(&self) -> i64 {
+        self.0.key
+    }
+}
+
 /// Configuration to resolve an incident.
 #[derive(Debug)]
 pub struct ResolveIncidentBuilder {
@@ -123,7 +130,7 @@ impl ResolveIncidentBuilder {
     }
 
     /// Submit the resolve incident request.
-    #[tracing::instrument(skip(self), fields(method = "resolve_incident"))]
+    #[tracing::instrument(skip(self), name = "resolve_incident")]
     pub async fn send(mut self) -> Result<ResolveIncidentResponse> {
         if self.incident_key.is_none() {
             return Err(Error::InvalidParameters("`incident_key` must be set"));
