@@ -32,4 +32,4 @@ tokio = { version = "1.1", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [build-dependencies]
-tonic-build = "0.5"
+tonic-build = "0.6"
