@@ -54,7 +54,7 @@ pub enum Error {
     /// GRPC result errors
     #[error(transparent)]
     GRPC(#[from] tonic::Status),
-    /// File I/O errors when reading workflows from disk.
+    /// File I/O errors when reading processes from disk.
     #[error("Invalid resource file {resource_file:?}: {source:?}")]
     FileIo {
         /// The specified resource file

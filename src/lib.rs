@@ -22,23 +22,23 @@
 //!     // Create a zeebe client
 //!     let client = Client::default();
 //!
-//!     // Deploy a workflow
+//!     // Deploy a process
 //!     client
-//!         .deploy_workflow()
+//!         .deploy_process()
 //!         .with_resource_file("examples/workflows/order-process.bpmn")
 //!         .send()
 //!         .await?;
 //!
-//!     // Create a new workflow instance
+//!     // Create a new process instance
 //!     client
-//!         .create_workflow_instance()
+//!         .create_process_instance()
 //!         .with_bpmn_process_id("order-process")
 //!         .with_latest_version()
 //!         .with_variables(json!({"orderId": 31243}))
 //!         .send()
 //!         .await?;
 //!
-//!     // Process a job type within the workflow
+//!     // Process a job type within the process
 //!     client
 //!         .job_worker()
 //!         .with_job_type("payment-service")
@@ -140,10 +140,10 @@
 pub(crate) mod client;
 pub(crate) mod error;
 pub(crate) mod job;
+pub(crate) mod process;
 pub(crate) mod topology;
 pub(crate) mod util;
 pub(crate) mod worker;
-pub(crate) mod workflow;
 
 #[allow(clippy::all)]
 pub(crate) mod proto {
@@ -156,14 +156,14 @@ pub use job::{
     CompleteJobBuilder, CompleteJobResponse, FailJobBuilder, FailJobResponse, Job,
     ThrowErrorBuilder, ThrowErrorResponse, UpdateJobRetriesBuilder, UpdateJobRetriesResponse,
 };
+pub use process::{
+    CancelProcessInstanceBuilder, CancelProcessInstanceResponse, CreateProcessInstanceBuilder,
+    CreateProcessInstanceResponse, CreateProcessInstanceWithResultBuilder,
+    CreateProcessInstanceWithResultResponse, DeployProcessBuilder, DeployProcessResponse,
+    ProcessMetadata, SetVariablesBuilder, SetVariablesResponse,
+};
 pub use topology::{BrokerInfo, Partition, TopologyBuilder, TopologyResponse};
 pub use util::{
     PublishMessageBuilder, PublishMessageResponse, ResolveIncidentBuilder, ResolveIncidentResponse,
 };
 pub use worker::{Data, JobWorkerBuilder, State};
-pub use workflow::{
-    CancelWorkflowInstanceBuilder, CancelWorkflowInstanceResponse, CreateWorkflowInstanceBuilder,
-    CreateWorkflowInstanceResponse, CreateWorkflowInstanceWithResultBuilder,
-    CreateWorkflowInstanceWithResultResponse, DeployWorkflowBuilder, DeployWorkflowResponse,
-    SetVariablesBuilder, SetVariablesResponse, WorkflowMetadata, WorkflowResourceType,
-};

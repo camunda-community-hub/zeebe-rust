@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 /// Worker state that persists across job [`auto handler`] invocations.
 ///
-/// [`auto handler`]: struct.JobWorkerBuilder.html#method.with_auto_handler
+/// [`auto handler`]: JobWorkerBuilder::with_auto_handler
 ///
 /// # Examples
 ///

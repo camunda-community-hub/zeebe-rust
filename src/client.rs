@@ -1,14 +1,14 @@
 use crate::{
     error::{Error, Result},
     job::{CompleteJobBuilder, FailJobBuilder, ThrowErrorBuilder, UpdateJobRetriesBuilder},
+    process::{
+        CancelProcessInstanceBuilder, CreateProcessInstanceBuilder,
+        CreateProcessInstanceWithResultBuilder, DeployProcessBuilder, SetVariablesBuilder,
+    },
     proto::gateway_client::GatewayClient,
     topology::TopologyBuilder,
     util::{PublishMessageBuilder, ResolveIncidentBuilder},
     worker::{auto_handler::Extensions, JobWorkerBuilder},
-    workflow::{
-        CancelWorkflowInstanceBuilder, CreateWorkflowInstanceBuilder,
-        CreateWorkflowInstanceWithResultBuilder, DeployWorkflowBuilder, SetVariablesBuilder,
-    },
 };
 use std::fmt::Debug;
 use std::rc::Rc;
@@ -58,7 +58,7 @@ impl Client {
     ///
     /// with TLS (see [the ClientTlsConfig docs] for configuration):
     ///
-    /// [the ClientTlsConfig docs]: https://docs.rs/tonic/latest/tonic/transport/struct.ClientTlsConfig.html
+    /// [the ClientTlsConfig docs]: tonic::transport::ClientTlsConfig
     ///
     /// ```
     /// use zeebe::{Client, ClientConfig};
@@ -103,8 +103,8 @@ impl Client {
         TopologyBuilder::new(self.clone())
     }
 
-    /// Deploys one or more workflows to Zeebe. Note that this is an atomic call,
-    /// i.e. either all workflows are deployed, or none of them are.
+    /// Deploys one or more processes to Zeebe. Note that this is an atomic call,
+    /// i.e. either all processes are deployed, or none of them are.
     ///
     /// # Examples
     ///
@@ -113,28 +113,28 @@ impl Client {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = zeebe::Client::new();
     ///
-    /// let workflow = client
-    ///     .deploy_workflow()
+    /// let process = client
+    ///     .deploy_process()
     ///     .with_resource_file("path/to/process.bpmn")
     ///     .send()
     ///     .await?;
     /// # Ok(())
     /// # }
-    pub fn deploy_workflow(&self) -> DeployWorkflowBuilder {
-        DeployWorkflowBuilder::new(self.clone())
+    pub fn deploy_process(&self) -> DeployProcessBuilder {
+        DeployProcessBuilder::new(self.clone())
     }
 
-    /// Creates and starts an instance of the specified workflow.
+    /// Creates and starts an instance of the specified process.
     ///
-    /// The workflow definition to use to create the instance can be specified
-    /// either using its unique key (as returned by [`deploy_workflow`]), or using the
+    /// The process definition to use to create the instance can be specified
+    /// either using its unique key (as returned by [`deploy_process`]), or using the
     /// BPMN process ID and a version. Pass -1 as the version to use the latest
     /// deployed version.
     ///
-    /// Note that only workflows with none start events can be started through this
+    /// Note that only processes with none start events can be started through this
     /// command.
     ///
-    /// [`deploy_workflow`]: struct.Client.html#method.deploy_workflow
+    /// [`deploy_process`]: Client::deploy_process
     ///
     ///  # Examples
     ///
@@ -145,8 +145,8 @@ impl Client {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = zeebe::Client::new();
     ///
-    /// let workflow_instance = client
-    ///     .create_workflow_instance()
+    /// let process_instance = client
+    ///     .create_process_instance()
     ///     .with_bpmn_process_id("example-process")
     ///     .with_latest_version()
     ///     .with_variables(json!({"myData": 31243}))
@@ -154,20 +154,20 @@ impl Client {
     ///     .await?;
     /// # Ok(())
     /// # }
-    pub fn create_workflow_instance(&self) -> CreateWorkflowInstanceBuilder {
-        CreateWorkflowInstanceBuilder::new(self.clone())
+    pub fn create_process_instance(&self) -> CreateProcessInstanceBuilder {
+        CreateProcessInstanceBuilder::new(self.clone())
     }
 
-    /// Similar to [`create_workflow_instance`], creates and starts an instance of
-    /// the specified workflow.
+    /// Similar to [`create_process_instance`], creates and starts an instance of
+    /// the specified process_
     ///
-    /// Unlike [`create_workflow_instance`], the response is returned when the
-    /// workflow is completed.
+    /// Unlike [`create_process_instance`], the response is returned when the
+    /// process_is completed.
     ///
-    /// Note that only workflows with none start events can be started through this
+    /// Note that only processes with none start events can be started through this
     /// command.
     ///
-    /// [`create_workflow_instance`]: struct.Client.html#method.create_workflow_instance
+    /// [`create_process_instance`]: Client::create_process_instance
     ///
     /// # Examples
     ///
@@ -178,8 +178,8 @@ impl Client {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = zeebe::Client::new();
     ///
-    /// let workflow_instance_with_result = client
-    ///     .create_workflow_instance_with_result()
+    /// let process_instance_with_result = client
+    ///     .create_process_instance_with_result()
     ///     .with_bpmn_process_id("example-process")
     ///     .with_latest_version()
     ///     .with_variables(json!({"myData": 31243}))
@@ -187,11 +187,11 @@ impl Client {
     ///     .await?;
     /// # Ok(())
     /// # }
-    pub fn create_workflow_instance_with_result(&self) -> CreateWorkflowInstanceWithResultBuilder {
-        CreateWorkflowInstanceWithResultBuilder::new(self.clone())
+    pub fn create_process_instance_with_result(&self) -> CreateProcessInstanceWithResultBuilder {
+        CreateProcessInstanceWithResultBuilder::new(self.clone())
     }
 
-    /// Cancels a running workflow instance.
+    /// Cancels a running process instance.
     ///
     /// # Examples
     ///
@@ -200,21 +200,21 @@ impl Client {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = zeebe::Client::new();
     ///
-    /// // workflow instance key, e.g. from a `CreateWorkflowInstanceResponse`.
-    /// let workflow_instance_key = 2251799813687287;
+    /// // process instance key, e.g. from a `CreateProcessInstanceResponse`.
+    /// let process_instance_key = 2251799813687287;
     ///
     /// let canceled = client
-    ///     .cancel_workflow_instance()
-    ///     .with_workflow_instance_key(workflow_instance_key)
+    ///     .cancel_process_instance()
+    ///     .with_process_instance_key(process_instance_key)
     ///     .send()
     ///     .await?;
     /// # Ok(())
     /// # }
-    pub fn cancel_workflow_instance(&self) -> CancelWorkflowInstanceBuilder {
-        CancelWorkflowInstanceBuilder::new(self.clone())
+    pub fn cancel_process_instance(&self) -> CancelProcessInstanceBuilder {
+        CancelProcessInstanceBuilder::new(self.clone())
     }
 
-    /// Updates all the variables of a particular scope (e.g. workflow instance,
+    /// Updates all the variables of a particular scope (e.g. process instance,
     /// flow element instance) from the given JSON document.
     ///
     /// # Examples
@@ -226,7 +226,7 @@ impl Client {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = zeebe::Client::new();
     ///
-    /// // workflow instance key, e.g. from a `CreateWorkflowInstanceResponse`.
+    /// // process instance key, e.g. from a `CreateProcessInstanceResponse`.
     /// let element_instance_key = 2251799813687287;
     ///
     /// let set_variables = client
@@ -356,7 +356,7 @@ impl Client {
     /// processing the job.
     ///
     /// The error is identified by an error code and is handled by an error catch
-    /// event in the workflow with the same error code.
+    /// event in the process with the same error code.
     ///
     /// # Examples
     ///
@@ -411,7 +411,7 @@ impl Client {
     /// [`update_job_retries`] will be necessary to actually resolve the problem,
     /// followed by this call.
     ///
-    /// [`update_job_retries`]: struct.Client.html#method.update_job_retries
+    /// [`update_job_retries`]: Client::update_job_retries
     ///
     /// # Examples
     ///
@@ -465,7 +465,7 @@ impl Client {
 ///
 /// See [the ClientTlsConfig docs] for tls configuration.
 ///
-/// [the ClientTlsConfig docs]: https://docs.rs/tonic/latest/tonic/transport/struct.ClientTlsConfig.html
+/// [the ClientTlsConfig docs]: tonic::transport::ClientTlsConfig
 ///
 /// # Examples
 ///
