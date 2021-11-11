@@ -29,23 +29,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a zeebe client
     let client = Client::default();
 
-    // Deploy a workflow
+    // Deploy a process
     client
-        .deploy_workflow()
+        .deploy_process()
         .with_resource_file("examples/workflows/order-process.bpmn")
         .send()
         .await?;
 
-    // Create a new workflow instance
+    // Create a new process instance
     client
-        .create_workflow_instance()
+        .create_process_instance()
         .with_bpmn_process_id("order-process")
         .with_latest_version()
         .with_variables(json!({"orderId": 1234}))
         .send()
         .await?;
 
-    // Process a job type within the workflow
+    // Process the instance with a worker
     client
         .job_worker()
         .with_job_type("payment-service")

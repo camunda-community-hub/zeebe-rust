@@ -3,7 +3,7 @@ use std::ops;
 
 /// Data that can be extracted from JSON encoded job variables in [`auto handlers`].
 ///
-/// [`auto handlers`]: struct.JobWorkerBuilder.html#method.with_auto_handler
+/// [`auto handlers`]: JobWorkerBuilder::with_auto_handler
 ///
 /// # Examples
 ///

@@ -41,7 +41,7 @@ impl JobHandler {
 
 impl fmt::Debug for JobHandler {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "JobHandler")
+        f.write_str("JobHandler")
     }
 }
 
@@ -217,7 +217,7 @@ impl JobWorkerBuilder {
             let span = tracing::info_span!(
                 "auto_handler",
                 otel.name = %job_type,
-                instance = job.workflow_instance_key(),
+                instance = job.process_instance_key(),
                 job = job.key(),
             );
             match T::from_job(&client, &job) {
@@ -260,7 +260,7 @@ impl JobWorkerBuilder {
 
     /// Set state to be persisted across job [`auto handler`] invocations.
     ///
-    /// [`auto handler`]: struct.JobWorkerBuilder.html#method.with_auto_handler
+    /// [`auto handler`]: JobWorkerBuilder::with_auto_handler
     ///
     /// # Examples
     ///

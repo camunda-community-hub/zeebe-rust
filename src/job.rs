@@ -21,24 +21,24 @@ impl Job {
         &self.0.r#type
     }
 
-    /// the job's workflow instance key
-    pub fn workflow_instance_key(&self) -> i64 {
-        self.0.workflow_instance_key
+    /// the job's process instance key
+    pub fn process_instance_key(&self) -> i64 {
+        self.0.process_instance_key
     }
 
-    /// the bpmn process ID of the job workflow definition
+    /// the bpmn process ID of the job process definition
     pub fn bpmn_process_id(&self) -> &str {
         &self.0.bpmn_process_id
     }
 
-    /// the version of the job workflow definition
-    pub fn workflow_definition_version(&self) -> i32 {
-        self.0.workflow_definition_version
+    /// the version of the job process definition
+    pub fn process_definition_version(&self) -> i32 {
+        self.0.process_definition_version
     }
 
-    /// the key of the job workflow definition
-    pub fn workflow_key(&self) -> i64 {
-        self.0.workflow_key
+    /// the key of the job process definition
+    pub fn process_definition_key(&self) -> i64 {
+        self.0.process_definition_key
     }
 
     /// the associated task element ID
@@ -47,7 +47,7 @@ impl Job {
     }
 
     /// the unique key identifying the associated task, unique within the scope of
-    /// the workflow instance
+    /// the process instance
     pub fn element_instance_key(&self) -> i64 {
         self.0.element_instance_key
     }
@@ -110,8 +110,6 @@ impl CompleteJobBuilder {
     }
 
     /// Set the unique job identifier, as obtained from [`ActivateJobsResponse`].
-    ///
-    /// [`ActivateJobsResponse`]: struct.ActivateJobsResponse.html
     pub fn with_job_key(self, job_key: i64) -> Self {
         CompleteJobBuilder {
             job_key: Some(job_key),
@@ -177,8 +175,6 @@ impl FailJobBuilder {
     }
 
     /// Set the unique job identifier, as obtained from [`ActivateJobsResponse`].
-    ///
-    /// [`ActivateJobsResponse`]: struct.ActivateJobsResponse.html
     pub fn with_job_key(self, job_key: i64) -> Self {
         FailJobBuilder {
             job_key: Some(job_key),
@@ -253,8 +249,6 @@ impl ThrowErrorBuilder {
     }
 
     /// Set the unique job identifier, as obtained from [`ActivateJobsResponse`].
-    ///
-    /// [`ActivateJobsResponse`]: struct.ActivateJobsResponse.html
     pub fn with_job_key(self, job_key: i64) -> Self {
         ThrowErrorBuilder {
             job_key: Some(job_key),
@@ -325,8 +319,6 @@ impl UpdateJobRetriesBuilder {
     }
 
     /// Set the unique job identifier, as obtained from [`ActivateJobsResponse`].
-    ///
-    /// [`ActivateJobsResponse`]: struct.ActivateJobsResponse.html
     pub fn with_job_key(self, job_key: i64) -> Self {
         UpdateJobRetriesBuilder {
             job_key: Some(job_key),

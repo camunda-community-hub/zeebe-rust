@@ -31,7 +31,7 @@ pub(crate) struct JobPoller {
 
 impl fmt::Debug for JobPoller {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "JobPoller")
+        f.write_str("JobPoller")
     }
 }
 
@@ -101,7 +101,7 @@ impl JobPoller {
                 let _ = retry_queue
                     .send(PollMessage::FetchJobsComplete)
                     .inspect_err(|err| {
-                        tracing::error!(?retry_worker, ?err, "fetch failed poll queue send failed");
+                        tracing::error!(?retry_worker, ?err, "retry queue send failed");
                     })
                     .await;
             }),

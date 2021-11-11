@@ -2,43 +2,28 @@ use crate::{proto, Client, Error, Result};
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::{debug, trace};
 
-/// Deploys one or more workflows to Zeebe.
+/// Deploys one or more process to Zeebe.
 ///
-/// Note that this is an atomic call, i.e. either all workflows are deployed, or
+/// Note that this is an atomic call, i.e. either all processes are deployed, or
 /// none of them are.
 #[derive(Debug)]
-pub struct DeployWorkflowBuilder {
+pub struct DeployProcessBuilder {
     client: Client,
     resource_files: Vec<String>,
-    resource_type: WorkflowResourceType,
 }
 
-/// The format of the uploaded workflows.
-#[derive(Clone, Debug)]
-pub enum WorkflowResourceType {
-    /// FILE type means the gateway will try to detect the resource type using the
-    /// file extension of the name field
-    File = 0,
-    /// extension 'bpmn'
-    Bpmn = 1,
-    /// extension 'yaml'
-    #[deprecated]
-    Yaml = 2,
-}
-
-impl DeployWorkflowBuilder {
-    /// Create a new deploy workflow builder.
+impl DeployProcessBuilder {
+    /// Create a new deploy process builder.
     pub fn new(client: Client) -> Self {
-        DeployWorkflowBuilder {
+        DeployProcessBuilder {
             client,
             resource_files: Vec::new(),
-            resource_type: WorkflowResourceType::File,
         }
     }
 
     /// Set a single resource file to upload.
     pub fn with_resource_file<T: Into<String>>(self, resource_file: T) -> Self {
-        DeployWorkflowBuilder {
+        DeployProcessBuilder {
             resource_files: vec![resource_file.into()],
             ..self
         }
@@ -46,29 +31,18 @@ impl DeployWorkflowBuilder {
 
     /// Set a list of resource files to uploaded.
     pub fn with_resource_files(self, resource_files: Vec<String>) -> Self {
-        DeployWorkflowBuilder {
+        DeployProcessBuilder {
             resource_files,
             ..self
         }
     }
 
-    /// Set the resource type for the uploaded workflows workflows.
-    #[deprecated(
-        note = "As of Zeebe 1.0, YAML support was removed and BPMN is the only supported resource type."
-    )]
-    pub fn with_resource_type(self, resource_type: WorkflowResourceType) -> Self {
-        DeployWorkflowBuilder {
-            resource_type,
-            ..self
-        }
-    }
-
-    /// Submit the workflows to the Zeebe brokers.
-    #[tracing::instrument(skip(self), name = "deploy_workflow")]
-    pub async fn send(mut self) -> Result<DeployWorkflowResponse> {
-        // Read workflow definitions
-        trace!(files = ?self.resource_files, resource_type = ?self.resource_type, "reading files");
-        let mut workflows = Vec::with_capacity(self.resource_files.len());
+    /// Submit the process to the Zeebe brokers.
+    #[tracing::instrument(skip(self), name = "deploy_process")]
+    pub async fn send(mut self) -> Result<DeployProcessResponse> {
+        // Read process definitions
+        trace!(files = ?self.resource_files, "reading files");
+        let mut processes = Vec::with_capacity(self.resource_files.len());
         for path in self.resource_files.iter() {
             let mut file = File::open(path).await.map_err(|e| Error::FileIo {
                 resource_file: path.clone(),
@@ -81,54 +55,52 @@ impl DeployWorkflowBuilder {
                     resource_file: path.clone(),
                     source: e,
                 })?;
-            #[allow(deprecated)]
-            workflows.push(proto::WorkflowRequestObject {
+            processes.push(proto::ProcessRequestObject {
                 name: path.clone(),
-                r#type: self.resource_type.clone() as i32,
                 definition,
             })
         }
 
-        debug!(files = ?self.resource_files, resource_type = ?self.resource_type, "sending request");
+        debug!(files = ?self.resource_files, "sending request");
 
         let res = self
             .client
             .gateway_client
-            .deploy_workflow(tonic::Request::new(proto::DeployWorkflowRequest {
-                workflows,
+            .deploy_process(tonic::Request::new(proto::DeployProcessRequest {
+                processes,
             }))
             .await?;
-        Ok(DeployWorkflowResponse(res.into_inner()))
+        Ok(DeployProcessResponse(res.into_inner()))
     }
 }
 
-/// Deployed workflow data.
+/// Deployed process data.
 #[derive(Debug)]
-pub struct DeployWorkflowResponse(proto::DeployWorkflowResponse);
+pub struct DeployProcessResponse(proto::DeployProcessResponse);
 
-impl DeployWorkflowResponse {
+impl DeployProcessResponse {
     /// the unique key identifying the deployment
     pub fn key(&self) -> i64 {
         self.0.key
     }
 
-    /// a list of deployed workflows
-    pub fn workflows(&self) -> Vec<WorkflowMetadata> {
+    /// a list of deployed processes
+    pub fn processes(&self) -> Vec<ProcessMetadata> {
         self.0
-            .workflows
+            .processes
             .iter()
-            .map(|proto| WorkflowMetadata(proto.clone()))
+            .map(|proto| ProcessMetadata(proto.clone()))
             .collect()
     }
 }
 
-/// Metadata information about a workflow.
+/// Metadata information about a process.
 #[derive(Debug)]
-pub struct WorkflowMetadata(proto::WorkflowMetadata);
+pub struct ProcessMetadata(proto::ProcessMetadata);
 
-impl WorkflowMetadata {
+impl ProcessMetadata {
     /// the bpmn process ID, as parsed during deployment; together with the version
-    /// forms a unique identifier for a specific workflow definition
+    /// forms a unique identifier for a specific process definition
     pub fn bpmn_process_id(&self) -> &str {
         &self.0.bpmn_process_id
     }
@@ -138,43 +110,39 @@ impl WorkflowMetadata {
         self.0.version
     }
 
-    /// the assigned key, which acts as a unique identifier for this workflow
-    pub fn workflow_key(&self) -> i64 {
-        self.0.workflow_key
+    /// the assigned key, which acts as a unique identifier for this process
+    pub fn process_definition_key(&self) -> i64 {
+        self.0.process_definition_key
     }
 
-    /// the resource name (see: WorkflowRequestObject.name) from which this workflow
+    /// the resource name (see: ProcessRequestObject.name) from which this process
     /// was parsed
     pub fn resource_name(&self) -> &str {
         &self.0.resource_name
     }
 }
 
-/// Creates and starts an instance of the specified workflow.
+/// Creates and starts an instance of the specified process.
 ///
-/// The workflow definition to use to create the instance can be specified
-/// either using its unique key (as returned by [`DeployWorkflowResponse`]), or using the
+/// The process definition to use to create the instance can be specified
+/// either using its unique key (as returned by [`DeployProcessResponse`]), or using the
 /// BPMN process ID and a version. Pass -1 as the version to use the latest
 /// deployed version.
 ///
-/// Note that only workflows with none start events can be started through this
+/// Note that only processes with no start events can be started through this
 /// command.
-///
-/// [`DeployWorkflowResponse`]: struct.DeployWorkflowResponse.html
 #[derive(Debug)]
-pub struct CreateWorkflowInstanceBuilder {
+pub struct CreateProcessInstanceBuilder {
     client: Client,
-    /// the unique key identifying the workflow definition (e.g. returned from a
-    /// workflow in the [`DeployWorkflowResponse`] message)
-    ///
-    /// [`DeployWorkflowResponse`]: struct.DeployWorkflowResponse.html
-    workflow_key: Option<i64>,
-    /// the BPMN process ID of the workflow definition
+    /// the unique key identifying the process definition (e.g. returned from a
+    /// process in the [`DeployProcessResponse`] message)
+    process_definition_key: Option<i64>,
+    /// the BPMN process ID of the process definition
     bpmn_process_id: Option<String>,
     /// the version of the process; set to -1 to use the latest version
     version: i32,
     /// JSON document that will instantiate the variables for the root variable
-    /// scope of the workflow instance; it must be a JSON object, as variables will
+    /// scope of the process instance; it must be a JSON object, as variables will
     /// be mapped in a key-value fashion. e.g. { "a": 1, "b": 2 } will create two
     /// variables, named "a" and "b" respectively, with their associated values. [{
     /// "a": 1, "b": 2 }] would not be a valid argument, as the root of the JSON
@@ -182,65 +150,65 @@ pub struct CreateWorkflowInstanceBuilder {
     variables: Option<serde_json::Value>,
 }
 
-impl CreateWorkflowInstanceBuilder {
-    /// Create a new workflow instance builder
+impl CreateProcessInstanceBuilder {
+    /// Create a new process instance builder
     pub fn new(client: Client) -> Self {
-        CreateWorkflowInstanceBuilder {
+        CreateProcessInstanceBuilder {
             client,
-            workflow_key: None,
+            process_definition_key: None,
             bpmn_process_id: None,
             version: -1,
             variables: None,
         }
     }
 
-    /// Set the workflow key for this workflow instance.
-    pub fn with_workflow_key(self, workflow_key: i64) -> Self {
-        CreateWorkflowInstanceBuilder {
-            workflow_key: Some(workflow_key),
+    /// Set the process key for this process instance.
+    pub fn with_process_definition_key(self, key: i64) -> Self {
+        CreateProcessInstanceBuilder {
+            process_definition_key: Some(key),
             ..self
         }
     }
 
-    /// Set the BPMN process id for this workflow instance.
+    /// Set the BPMN process id for this process instance.
     pub fn with_bpmn_process_id<T: Into<String>>(self, bpmn_process_id: T) -> Self {
-        CreateWorkflowInstanceBuilder {
+        CreateProcessInstanceBuilder {
             bpmn_process_id: Some(bpmn_process_id.into()),
             ..self
         }
     }
 
-    /// Set the version for this workflow instance.
+    /// Set the version for this process instance.
     pub fn with_version(self, version: i32) -> Self {
-        CreateWorkflowInstanceBuilder { version, ..self }
+        CreateProcessInstanceBuilder { version, ..self }
     }
 
-    /// Use the latest workflow version for this workflow instance.
+    /// Use the latest process version for this process instance.
     pub fn with_latest_version(self) -> Self {
-        CreateWorkflowInstanceBuilder {
+        CreateProcessInstanceBuilder {
             version: -1,
             ..self
         }
     }
 
-    /// Set variables for this workflow instance.
+    /// Set variables for this process instance.
     pub fn with_variables<T: Into<serde_json::Value>>(self, variables: T) -> Self {
-        CreateWorkflowInstanceBuilder {
+        CreateProcessInstanceBuilder {
             variables: Some(variables.into()),
             ..self
         }
     }
 
-    /// Submit this workflow instance to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), name = "create_workflow_instance")]
-    pub async fn send(mut self) -> Result<CreateWorkflowInstanceResponse> {
-        if self.workflow_key.is_none() && self.bpmn_process_id.is_none() {
+    /// Submit this process instance to the configured Zeebe brokers.
+    #[tracing::instrument(skip(self), name = "create_process_instance")]
+    pub async fn send(mut self) -> Result<CreateProcessInstanceResponse> {
+        if self.process_definition_key.is_none() && self.bpmn_process_id.is_none() {
             return Err(Error::InvalidParameters(
-                "`workflow_key` or `pbmn_process_id` must be set",
+                "`process_definition_key` or `pbmn_process_id` must be set",
             ));
         }
-        let req = proto::CreateWorkflowInstanceRequest {
-            workflow_key: self.workflow_key.unwrap_or(0),
+        let req = proto::CreateProcessInstanceRequest {
+            process_definition_key: self.process_definition_key.unwrap_or(0),
             bpmn_process_id: self.bpmn_process_id.unwrap_or_else(String::new),
             version: self.version,
             variables: self
@@ -252,89 +220,85 @@ impl CreateWorkflowInstanceBuilder {
         let res = self
             .client
             .gateway_client
-            .create_workflow_instance(tonic::Request::new(req))
+            .create_process_instance(tonic::Request::new(req))
             .await?;
 
-        Ok(CreateWorkflowInstanceResponse(res.into_inner()))
+        Ok(CreateProcessInstanceResponse(res.into_inner()))
     }
 }
 
-/// Created workflow instance data.
+/// Created process instance data.
 #[derive(Debug)]
-pub struct CreateWorkflowInstanceResponse(proto::CreateWorkflowInstanceResponse);
+pub struct CreateProcessInstanceResponse(proto::CreateProcessInstanceResponse);
 
-impl CreateWorkflowInstanceResponse {
-    /// the key of the workflow definition which was used to create the workflow
+impl CreateProcessInstanceResponse {
+    /// the key of the process definition which was used to create the process
     /// instance
-    pub fn workflow_key(&self) -> i64 {
-        self.0.workflow_key
+    pub fn process_definition_key(&self) -> i64 {
+        self.0.process_definition_key
     }
 
-    /// the BPMN process ID of the workflow definition which was used to create the
-    /// workflow instance
+    /// the BPMN process ID of the process definition which was used to create the
+    /// process instance
     pub fn bpmn_process_id(&self) -> &str {
         &self.0.bpmn_process_id
     }
 
-    /// the version of the workflow definition which was used to create the workflow
+    /// the version of the process definition which was used to create the process
     /// instance
     pub fn version(&self) -> i32 {
         self.0.version
     }
 
-    /// the unique identifier of the created workflow instance; to be used wherever
-    /// a request needs a workflow instance key (e.g. CancelWorkflowInstanceRequest)
-    pub fn workflow_instance_key(&self) -> i64 {
-        self.0.workflow_instance_key
+    /// the unique identifier of the created process instance; to be used wherever
+    /// a request needs a process instance key (e.g. CancelProcessInstanceRequest)
+    pub fn process_instance_key(&self) -> i64 {
+        self.0.process_instance_key
     }
 }
 
-/// Creates and starts an instance of the specified workflow with result.
+/// Creates and starts an instance of the specified process with result.
 ///
-/// Similar to [`CreateWorkflowInstanceBuilder`], creates and starts an instance of
-/// the specified workflow. Unlike [`CreateWorkflowInstanceBuilder`], the response is
-/// returned when the workflow is completed.
+/// Similar to [`CreateProcessInstanceBuilder`], creates and starts an instance of
+/// the specified process. Unlike [`CreateProcessInstanceBuilder`], the response is
+/// returned when the process is completed.
 ///
-/// Note that only workflows with none start events can be started through this
+/// Note that only processes with none start events can be started through this
 /// command.
-///
-/// [`CreateWorkflowInstanceBuilder`]: struct.CreateWorkflowInstanceBuilder.html
 #[derive(Debug)]
-pub struct CreateWorkflowInstanceWithResultBuilder {
+pub struct CreateProcessInstanceWithResultBuilder {
     client: Client,
-    /// the unique key identifying the workflow definition (e.g. returned from a
-    /// workflow in the DeployWorkflowResponse message)
-    workflow_key: Option<i64>,
-    /// the BPMN process ID of the workflow definition
+    /// the unique key identifying the process definition (e.g. returned from a
+    /// process in the DeployProcessResponse message)
+    process_definition_key: Option<i64>,
+    /// the BPMN process ID of the process definition
     bpmn_process_id: Option<String>,
     /// the version of the process; set to -1 to use the latest version
     version: i32,
     /// JSON document that will instantiate the variables for the root variable
-    /// scope of the workflow instance; it must be a JSON object, as variables will
+    /// scope of the process instance; it must be a JSON object, as variables will
     /// be mapped in a key-value fashion. e.g. { "a": 1, "b": 2 } will create two
     /// variables, named "a" and "b" respectively, with their associated values. [{
     /// "a": 1, "b": 2 }] would not be a valid argument, as the root of the JSON
     /// document is an array and not an object.
     variables: Option<serde_json::Value>,
-    /// timeout (in ms). the request will be closed if the workflow is not completed before
+    /// timeout (in ms). the request will be closed if the process is not completed before
     /// the requestTimeout.
     ///
     /// if request_timeout = 0, uses the generic requestTimeout configured in the gateway.
     request_timeout: u64,
     /// list of names of variables to be included in
-    /// [`CreateWorkflowInstanceWithResultResponse`]'s variables if empty, all visible
+    /// [`CreateProcessInstanceWithResultResponse`]'s variables if empty, all visible
     /// variables in the root scope will be returned.
-    ///
-    /// [`CreateWorkflowInstanceWithResultResponse`]: struct.CreateWorkflowInstanceWithResultResponse.html
     fetch_variables: Vec<String>,
 }
 
-impl CreateWorkflowInstanceWithResultBuilder {
-    /// Create a new workflow instance builder
+impl CreateProcessInstanceWithResultBuilder {
+    /// Create a new process instance builder
     pub fn new(client: Client) -> Self {
-        CreateWorkflowInstanceWithResultBuilder {
+        CreateProcessInstanceWithResultBuilder {
             client,
-            workflow_key: None,
+            process_definition_key: None,
             bpmn_process_id: None,
             version: -1,
             variables: None,
@@ -343,70 +307,70 @@ impl CreateWorkflowInstanceWithResultBuilder {
         }
     }
 
-    /// Set the workflow key for this workflow instance.
-    pub fn with_workflow_key(self, workflow_key: i64) -> Self {
-        CreateWorkflowInstanceWithResultBuilder {
-            workflow_key: Some(workflow_key),
+    /// Set the process key for this process instance.
+    pub fn with_process_definition_key(self, key: i64) -> Self {
+        CreateProcessInstanceWithResultBuilder {
+            process_definition_key: Some(key),
             ..self
         }
     }
 
-    /// Set the BPMN process id for this workflow instance.
+    /// Set the BPMN process id for this process instance.
     pub fn with_bpmn_process_id<T: Into<String>>(self, bpmn_process_id: T) -> Self {
-        CreateWorkflowInstanceWithResultBuilder {
+        CreateProcessInstanceWithResultBuilder {
             bpmn_process_id: Some(bpmn_process_id.into()),
             ..self
         }
     }
 
-    /// Set the version for this workflow instance.
+    /// Set the version for this process instance.
     pub fn with_version(self, version: i32) -> Self {
-        CreateWorkflowInstanceWithResultBuilder { version, ..self }
+        CreateProcessInstanceWithResultBuilder { version, ..self }
     }
 
-    /// Use the latest workflow version for this workflow instance.
+    /// Use the latest process version for this process instance.
     pub fn with_latest_version(self) -> Self {
-        CreateWorkflowInstanceWithResultBuilder {
+        CreateProcessInstanceWithResultBuilder {
             version: -1,
             ..self
         }
     }
 
-    /// Set variables for this workflow instance.
+    /// Set variables for this process instance.
     pub fn with_variables<T: Into<serde_json::Value>>(self, variables: T) -> Self {
-        CreateWorkflowInstanceWithResultBuilder {
+        CreateProcessInstanceWithResultBuilder {
             variables: Some(variables.into()),
             ..self
         }
     }
 
-    /// Set variables for this workflow instance.
+    /// Set variables for this process instance.
     pub fn with_fetch_variables(self, fetch_variables: Vec<String>) -> Self {
-        CreateWorkflowInstanceWithResultBuilder {
+        CreateProcessInstanceWithResultBuilder {
             fetch_variables,
             ..self
         }
     }
 
-    /// Set the result timeout for this workflow instance request.
+    /// Set the result timeout for this process instance request.
     pub fn with_request_timeout(self, request_timeout: u64) -> Self {
-        CreateWorkflowInstanceWithResultBuilder {
+        CreateProcessInstanceWithResultBuilder {
             request_timeout,
             ..self
         }
     }
 
-    /// Submit this workflow instance to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), name = "create_workflow_instance_with_result")]
-    pub async fn send(mut self) -> Result<CreateWorkflowInstanceWithResultResponse> {
-        if self.workflow_key.is_none() && self.bpmn_process_id.is_none() {
+    /// Submit this process instance to the configured Zeebe brokers.
+    #[tracing::instrument(skip(self), name = "create_process_instance_with_result")]
+    pub async fn send(mut self) -> Result<CreateProcessInstanceWithResultResponse> {
+        if self.process_definition_key.is_none() && self.bpmn_process_id.is_none() {
             return Err(Error::InvalidParameters(
-                "`workflow_key` or `pbmn_process_id` must be set",
+                "`process_definition_key` or `pbmn_process_id` must be set",
             ));
         }
-        let req = proto::CreateWorkflowInstanceWithResultRequest {
-            request: Some(proto::CreateWorkflowInstanceRequest {
-                workflow_key: self.workflow_key.unwrap_or(0),
+        let req = proto::CreateProcessInstanceWithResultRequest {
+            request: Some(proto::CreateProcessInstanceRequest {
+                process_definition_key: self.process_definition_key.unwrap_or(0),
                 bpmn_process_id: self.bpmn_process_id.unwrap_or_else(String::new),
                 version: self.version,
                 variables: self
@@ -421,42 +385,40 @@ impl CreateWorkflowInstanceWithResultBuilder {
         let res = self
             .client
             .gateway_client
-            .create_workflow_instance_with_result(tonic::Request::new(req))
+            .create_process_instance_with_result(tonic::Request::new(req))
             .await?;
 
-        Ok(CreateWorkflowInstanceWithResultResponse(res.into_inner()))
+        Ok(CreateProcessInstanceWithResultResponse(res.into_inner()))
     }
 }
 
-/// Created workflow instance with result data.
+/// Created process instance with result data.
 #[derive(Debug)]
-pub struct CreateWorkflowInstanceWithResultResponse(
-    proto::CreateWorkflowInstanceWithResultResponse,
-);
+pub struct CreateProcessInstanceWithResultResponse(proto::CreateProcessInstanceWithResultResponse);
 
-impl CreateWorkflowInstanceWithResultResponse {
-    /// the key of the workflow definition which was used to create the workflow
+impl CreateProcessInstanceWithResultResponse {
+    /// the key of the process definition which was used to create the process
     /// instance
-    pub fn workflow_key(&self) -> i64 {
-        self.0.workflow_key
+    pub fn process_definition_key(&self) -> i64 {
+        self.0.process_definition_key
     }
 
-    /// the BPMN process ID of the workflow definition which was used to create the
-    /// workflow instance
+    /// the BPMN process ID of the process definition which was used to create the
+    /// process instance
     pub fn bpmn_process_id(&self) -> &str {
         &self.0.bpmn_process_id
     }
 
-    /// the version of the workflow definition which was used to create the workflow
+    /// the version of the process definition which was used to create the process
     /// instance
     pub fn version(&self) -> i32 {
         self.0.version
     }
 
-    /// the unique identifier of the created workflow instance; to be used wherever
-    /// a request needs a workflow instance key (e.g. CancelWorkflowInstanceRequest)
-    pub fn workflow_instance_key(&self) -> i64 {
-        self.0.workflow_instance_key
+    /// the unique identifier of the created process instance; to be used wherever
+    /// a request needs a process instance key (e.g. CancelProcessInstanceRequest)
+    pub fn process_instance_key(&self) -> i64 {
+        self.0.process_instance_key
     }
 
     /// Serialized JSON document that consists of visible variables in the root scope
@@ -475,62 +437,60 @@ impl CreateWorkflowInstanceWithResultResponse {
     }
 }
 
-/// Cancels a running workflow instance.
+/// Cancels a running process instance.
 #[derive(Debug)]
-pub struct CancelWorkflowInstanceBuilder {
+pub struct CancelProcessInstanceBuilder {
     client: Client,
-    /// The unique key identifying the workflow instance (e.g. returned from a
-    /// workflow in the [`CreateWorkflowInstanceResponse`] struct).
-    ///
-    /// [`CreateWorkflowInstanceResponse`]: struct.CreateWorkflowInstanceResponse.html
-    workflow_instance_key: Option<i64>,
+    /// The unique key identifying the process instance (e.g. returned from a
+    /// process in the [`CreateProcessInstanceResponse`] struct).
+    process_instance_key: Option<i64>,
 }
 
-impl CancelWorkflowInstanceBuilder {
-    /// Create a new cancel workflow instance builder
+impl CancelProcessInstanceBuilder {
+    /// Create a new cancel process instance builder
     pub fn new(client: Client) -> Self {
-        CancelWorkflowInstanceBuilder {
+        CancelProcessInstanceBuilder {
             client,
-            workflow_instance_key: None,
+            process_instance_key: None,
         }
     }
 
-    /// Set the workflow instance key.
-    pub fn with_workflow_instance_key(self, workflow_key: i64) -> Self {
-        CancelWorkflowInstanceBuilder {
-            workflow_instance_key: Some(workflow_key),
+    /// Set the process instance key.
+    pub fn with_process_instance_key(self, key: i64) -> Self {
+        CancelProcessInstanceBuilder {
+            process_instance_key: Some(key),
             ..self
         }
     }
 
-    /// Submit this cancel workflow instance request to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), name = "cancel_workflow_instance")]
-    pub async fn send(mut self) -> Result<CancelWorkflowInstanceResponse> {
-        if self.workflow_instance_key.is_none() {
+    /// Submit this cancel process instance request to the configured Zeebe brokers.
+    #[tracing::instrument(skip(self), name = "cancel_process_instance")]
+    pub async fn send(mut self) -> Result<CancelProcessInstanceResponse> {
+        if self.process_instance_key.is_none() {
             return Err(Error::InvalidParameters(
-                "`workflow_instance_key` must be set",
+                "`process_instance_key` must be set",
             ));
         }
-        let req = proto::CancelWorkflowInstanceRequest {
-            workflow_instance_key: self.workflow_instance_key.unwrap(),
+        let req = proto::CancelProcessInstanceRequest {
+            process_instance_key: self.process_instance_key.unwrap(),
         };
 
         debug!(?req, "sending request:");
         let res = self
             .client
             .gateway_client
-            .cancel_workflow_instance(tonic::Request::new(req))
+            .cancel_process_instance(tonic::Request::new(req))
             .await?;
 
-        Ok(CancelWorkflowInstanceResponse(res.into_inner()))
+        Ok(CancelProcessInstanceResponse(res.into_inner()))
     }
 }
 
-/// Canceled workflow instance data.
+/// Canceled process instance data.
 #[derive(Debug)]
-pub struct CancelWorkflowInstanceResponse(proto::CancelWorkflowInstanceResponse);
+pub struct CancelProcessInstanceResponse(proto::CancelProcessInstanceResponse);
 
-/// Updates all the variables of a particular scope (e.g. workflow instance, flow
+/// Updates all the variables of a particular scope (e.g. process instance, flow
 /// element instance) from the given JSON document.
 #[derive(Debug)]
 pub struct SetVariablesBuilder {
@@ -553,7 +513,7 @@ impl SetVariablesBuilder {
 
     /// Set the unique identifier of this element.
     ///
-    /// can be the workflow instance key (as obtained during instance creation), or
+    /// can be the process instance key (as obtained during instance creation), or
     /// a given element, such as a service task (see `element_instance_key` on the job
     /// message).
     pub fn with_element_instance_key(self, element_instance_key: i64) -> Self {
