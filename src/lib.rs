@@ -140,6 +140,7 @@
 pub(crate) mod client;
 pub(crate) mod error;
 pub(crate) mod job;
+pub(crate) mod oauth;
 pub(crate) mod process;
 pub(crate) mod topology;
 pub(crate) mod util;

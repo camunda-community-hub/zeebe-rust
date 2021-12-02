@@ -71,4 +71,6 @@ pub enum Error {
     /// Missing worker state configuration
     #[error("Worker state is not configured, use `JobWorkerBuilder::with_state` while building worker for this job")]
     MissingWorkerStateConfig,
+    #[error("Could not authenticate: {0}")]
+    Auth(String),
 }
