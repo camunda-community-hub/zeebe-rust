@@ -1,15 +1,18 @@
 use serde_json::json;
+use tracing_subscriber::EnvFilter;
 use zeebe::{Client, Job};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // initialize tracing
     tracing_subscriber::fmt()
-        .with_env_filter("zeebe=trace")
+        .with_env_filter(EnvFilter::from_default_env())
         .init();
 
     // Create a zeebe client
     let client = Client::default();
+
+    tracing::info!("Deploying process");
 
     // Deploy a process
     client
@@ -17,6 +20,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_resource_file("examples/workflows/order-process.bpmn")
         .send()
         .await?;
+
+    tracing::info!("Creating process instance");
 
     // Create a new process instance
     client
@@ -26,6 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_variables(json!({"orderId": 31243}))
         .send()
         .await?;
+
+    tracing::info!("Handling job");
 
     // Process the instance with a worker
     client

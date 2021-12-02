@@ -1,3 +1,4 @@
+use crate::oauth::AuthInterceptor;
 use crate::{
     error::{Error, Result},
     job::{CompleteJobBuilder, FailJobBuilder, ThrowErrorBuilder, UpdateJobRetriesBuilder},
@@ -13,6 +14,7 @@ use crate::{
 use std::fmt::Debug;
 use std::rc::Rc;
 use std::time::Duration;
+use tonic::codegen::InterceptedService;
 use tonic::transport::{Channel, ClientTlsConfig};
 
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -21,7 +23,7 @@ const DEFAULT_KEEP_ALIVE: Duration = Duration::from_secs(45);
 /// Client used to communicate with Zeebe.
 #[derive(Clone, Debug)]
 pub struct Client {
-    pub(crate) gateway_client: GatewayClient<Channel>,
+    pub(crate) gateway_client: GatewayClient<InterceptedService<Channel, AuthInterceptor>>,
     pub(crate) current_job_key: Option<i64>,
     pub(crate) current_job_extensions: Option<Rc<Extensions>>,
 }
@@ -79,8 +81,10 @@ impl Client {
     pub fn from_config(config: ClientConfig) -> Result<Self> {
         let channel = Self::build_channel(config)?;
 
+        let gateway_client = GatewayClient::with_interceptor(channel, AuthInterceptor::default());
+
         Ok(Client {
-            gateway_client: GatewayClient::new(channel),
+            gateway_client,
             current_job_key: None,
             current_job_extensions: None,
         })
@@ -470,7 +474,7 @@ impl Client {
 /// # Examples
 ///
 /// ```
-/// let endpoints = vec!["http://0.0.0.0:26500".to_string()];
+/// let endpoints = vec!["http://127.0.0.1:26500".to_string()];
 ///
 /// let config = zeebe::ClientConfig {
 ///     endpoints,
@@ -497,8 +501,11 @@ impl ClientConfig {
 
 impl Default for ClientConfig {
     fn default() -> Self {
+        let endpoint =
+            std::env::var("ZEEBE_ADDRESS").unwrap_or("http://127.0.0.1:26500".to_owned());
+
         ClientConfig {
-            endpoints: vec!["http://0.0.0.0:26500".to_string()],
+            endpoints: vec![endpoint],
             tls: None,
         }
     }
