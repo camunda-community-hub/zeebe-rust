@@ -1,5 +1,7 @@
 use oauth2::basic::{BasicClient, BasicTokenResponse};
 use oauth2::{AuthUrl, ClientId, ClientSecret, TokenResponse, TokenUrl};
+use std::sync::{Arc, Mutex};
+use tokio::runtime::Handle;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
 use tonic::Status;
@@ -36,17 +38,20 @@ impl AuthConfig {
 pub struct AuthInterceptor {
     auth_config: Option<AuthConfig>,
     pub oauth2_client: Option<BasicClient>,
-    pub cached_token: Option<BasicTokenResponse>,
+    pub cached_token: Arc<Mutex<Option<BasicTokenResponse>>>,
 }
 
 impl AuthInterceptor {
     fn get_token(&mut self) -> Result<BasicTokenResponse, Error> {
         if let Some(oauth2_client) = &self.oauth2_client {
             tracing::trace!("Getting token: {:?}", oauth2_client);
-            if let Some(token) = &self.cached_token {
-                if token.expires_in().unwrap_or_default() > std::time::Duration::default() {
-                    tracing::trace!("Using cached token");
-                    return Ok(token.clone());
+
+            if let Ok(token) = self.cached_token.lock() {
+                if let Some(token) = &*token {
+                    if token.expires_in().unwrap_or_default() > std::time::Duration::default() {
+                        tracing::trace!("Using cached token");
+                        return Ok(token.clone());
+                    }
                 }
             }
 
@@ -66,9 +71,10 @@ impl AuthInterceptor {
 
             tracing::trace!("Sending token request: {:?}", token_request);
 
-            let token_response = futures::executor::block_on(
-                token_request.request_async(oauth2::reqwest::async_http_client),
-            )
+            let token_response = tokio::task::block_in_place(move || {
+                Handle::current()
+                    .block_on(token_request.request_async(oauth2::reqwest::async_http_client))
+            })
             .map_err(|error| {
                 tracing::error!(error = %error, "Error getting oauth token");
                 Status::permission_denied(format!("{}", error))
@@ -76,7 +82,9 @@ impl AuthInterceptor {
 
             tracing::trace!("Got Oauth token");
 
-            self.cached_token = Some(token_response.clone());
+            if let Ok(mut locked) = self.cached_token.lock() {
+                *locked = Some(token_response.clone());
+            }
 
             Ok(token_response)
         } else {
@@ -101,10 +109,11 @@ impl Default for AuthInterceptor {
         } else {
             None
         };
+
         AuthInterceptor {
             auth_config,
             oauth2_client,
-            cached_token: None,
+            cached_token: Arc::new(Mutex::new(None)),
         }
     }
 }

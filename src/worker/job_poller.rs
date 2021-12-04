@@ -14,7 +14,7 @@ use tonic::Code;
 const LONG_POLLING_MAX_DURATION: Duration = Duration::from_secs(10);
 const LONG_POLLING_OFFSET_PERCENT: f32 = 0.1;
 
-const TIMEOUT_ERROR: &str = "transport error: request timed out";
+const TIMEOUT_ERROR: &str = "Timeout expired";
 
 pub(crate) struct JobPoller {
     pub(crate) client: Client,
