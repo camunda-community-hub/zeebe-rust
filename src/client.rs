@@ -1,6 +1,8 @@
+use crate::oauth::AuthInterceptor;
 use crate::{
     error::{Error, Result},
     job::{CompleteJobBuilder, FailJobBuilder, ThrowErrorBuilder, UpdateJobRetriesBuilder},
+    oauth::OAuthConfig,
     process::{
         CancelProcessInstanceBuilder, CreateProcessInstanceBuilder,
         CreateProcessInstanceWithResultBuilder, DeployProcessBuilder, SetVariablesBuilder,
@@ -10,18 +12,28 @@ use crate::{
     util::{PublishMessageBuilder, ResolveIncidentBuilder},
     worker::{auto_handler::Extensions, JobWorkerBuilder},
 };
+use std::env;
 use std::fmt::Debug;
+use std::fs;
 use std::rc::Rc;
 use std::time::Duration;
-use tonic::transport::{Channel, ClientTlsConfig};
+use tonic::codegen::InterceptedService;
+use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const DEFAULT_KEEP_ALIVE: Duration = Duration::from_secs(45);
+const CA_CERTIFICATE_PATH: &str = "ZEEBE_CA_CERTIFICATE_PATH";
+const ADDRESS: &str = "ZEEBE_ADDRESS";
+const HOST: &str = "ZEEBE_HOST";
+const DEFAULT_ADDRESS_HOST: &str = "http://127.0.0.1";
+const PORT: &str = "ZEEBE_PORT";
+const DEFAULT_ADDRESS_PORT: &str = "26500";
 
 /// Client used to communicate with Zeebe.
 #[derive(Clone, Debug)]
 pub struct Client {
-    pub(crate) gateway_client: GatewayClient<Channel>,
+    pub(crate) gateway_client: GatewayClient<InterceptedService<Channel, AuthInterceptor>>,
+    pub(crate) auth_interceptor: AuthInterceptor,
     pub(crate) current_job_key: Option<i64>,
     pub(crate) current_job_extensions: Option<Rc<Extensions>>,
 }
@@ -38,6 +50,11 @@ impl Client {
         Client::default()
     }
 
+    /// Create a new client from environment variables
+    pub fn from_env() -> Result<Self> {
+        Client::from_config(ClientConfig::from_env()?)
+    }
+
     /// Build a new Zeebe client from a given configuration.
     ///
     /// # Examples
@@ -48,10 +65,7 @@ impl Client {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let endpoints = vec!["http://0.0.0.0:26500".to_string()];
     ///
-    /// let client = Client::from_config(ClientConfig {
-    ///     endpoints,
-    ///     tls: None
-    /// })?;
+    /// let client = Client::from_config(ClientConfig::with_endpoints(endpoints));
     /// # Ok(())
     /// # }
     /// ```
@@ -72,18 +86,33 @@ impl Client {
     /// let client = Client::from_config(ClientConfig {
     ///     endpoints,
     ///     tls: Some(tls),
+    ///     auth: None,
     /// })?;
     /// # Ok(())
     /// # }
     /// ```
     pub fn from_config(config: ClientConfig) -> Result<Self> {
-        let channel = Self::build_channel(config)?;
+        let channel = Self::build_channel(config.endpoints, config.tls)?;
+
+        let auth_interceptor = if let Some(auth_config) = config.auth {
+            AuthInterceptor::init(auth_config)?
+        } else {
+            AuthInterceptor::default()
+        };
+
+        let gateway_client = GatewayClient::with_interceptor(channel, auth_interceptor.clone());
 
         Ok(Client {
-            gateway_client: GatewayClient::new(channel),
+            gateway_client,
+            auth_interceptor,
             current_job_key: None,
             current_job_extensions: None,
         })
+    }
+
+    /// Future that resolves when the auth interceptor is initialized.
+    pub async fn auth_initialized(&self) -> Result<()> {
+        self.auth_interceptor.auth_initialized().await
     }
 
     /// Obtains the current topology of the cluster the gateway is part of.
@@ -433,8 +462,7 @@ impl Client {
         ResolveIncidentBuilder::new(self.clone())
     }
 
-    fn build_channel(config: ClientConfig) -> Result<Channel> {
-        let ClientConfig { endpoints, tls, .. } = config;
+    fn build_channel(endpoints: Vec<String>, tls: Option<ClientTlsConfig>) -> Result<Channel> {
         let endpoints = endpoints
             .into_iter()
             .map(|uri| {
@@ -470,11 +498,12 @@ impl Client {
 /// # Examples
 ///
 /// ```
-/// let endpoints = vec!["http://0.0.0.0:26500".to_string()];
+/// let endpoints = vec!["http://127.0.0.1:26500".to_string()];
 ///
 /// let config = zeebe::ClientConfig {
 ///     endpoints,
-///     tls: None
+///     tls: None,
+///     auth: None,
 /// };
 /// ```
 #[derive(Debug)]
@@ -483,23 +512,62 @@ pub struct ClientConfig {
     pub endpoints: Vec<String>,
     /// TLS configuration
     pub tls: Option<ClientTlsConfig>,
+    /// OAuth config
+    pub auth: Option<OAuthConfig>,
 }
 
 impl ClientConfig {
+    /// Get client config from environment
+    pub fn from_env() -> Result<Self> {
+        let tls = if let Ok(ca_path) = env::var(CA_CERTIFICATE_PATH) {
+            let pem = fs::read_to_string(ca_path).map_err(|err| Error::Auth(err.to_string()))?;
+            let cert = Certificate::from_pem(pem);
+
+            Some(ClientTlsConfig::new().ca_certificate(cert))
+        } else {
+            None
+        };
+
+        let address = if let Ok(gateway_host) = env::var(HOST) {
+            if let Ok(gateway_port) = env::var(PORT) {
+                format!("{}:{}", gateway_host, gateway_port)
+            } else {
+                format!("{}:{}", gateway_host, DEFAULT_ADDRESS_PORT)
+            }
+        } else if let Ok(gateway_port) = env::var(PORT) {
+            format!("{}:{}", DEFAULT_ADDRESS_HOST, gateway_port)
+        } else if let Ok(gateway_address) = env::var(ADDRESS) {
+            gateway_address
+        } else {
+            format!("{}:{}", DEFAULT_ADDRESS_HOST, DEFAULT_ADDRESS_PORT)
+        };
+
+        let auth = if OAuthConfig::should_use_env_config() {
+            Some(OAuthConfig::from_env()?)
+        } else {
+            None
+        };
+
+        Ok(ClientConfig {
+            endpoints: vec![address],
+            tls,
+            auth,
+        })
+    }
+
     /// Set the grpc endpoints the client should connect to.
     pub fn with_endpoints(endpoints: Vec<String>) -> Self {
         ClientConfig {
             endpoints,
-            ..Default::default()
+            tls: None,
+            auth: None,
         }
     }
 }
 
 impl Default for ClientConfig {
     fn default() -> Self {
-        ClientConfig {
-            endpoints: vec!["http://0.0.0.0:26500".to_string()],
-            tls: None,
-        }
+        let default_address = format!("{}:{}", DEFAULT_ADDRESS_HOST, DEFAULT_ADDRESS_PORT);
+        ClientConfig::with_endpoints(vec![default_address])
     }
 }

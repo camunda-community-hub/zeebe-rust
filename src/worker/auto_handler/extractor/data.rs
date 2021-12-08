@@ -1,9 +1,9 @@
 use std::fmt;
 use std::ops;
 
-/// Data that can be extracted from JSON encoded job variables in [`auto handlers`].
+/// Data that can be extracted from JSON encoded job variables in [`auto handler`]s.
 ///
-/// [`auto handlers`]: JobWorkerBuilder::with_auto_handler
+/// [`auto handler`]: crate::JobWorkerBuilder::with_auto_handler
 ///
 /// # Examples
 ///

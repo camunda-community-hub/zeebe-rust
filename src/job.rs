@@ -109,7 +109,7 @@ impl CompleteJobBuilder {
         }
     }
 
-    /// Set the unique job identifier, as obtained from [`ActivateJobsResponse`].
+    /// Set the unique job identifier, as obtained from [`Job::key`].
     pub fn with_job_key(self, job_key: i64) -> Self {
         CompleteJobBuilder {
             job_key: Some(job_key),
@@ -174,7 +174,7 @@ impl FailJobBuilder {
         }
     }
 
-    /// Set the unique job identifier, as obtained from [`ActivateJobsResponse`].
+    /// Set the unique job identifier, as obtained from [`Job::key`].
     pub fn with_job_key(self, job_key: i64) -> Self {
         FailJobBuilder {
             job_key: Some(job_key),
@@ -248,7 +248,7 @@ impl ThrowErrorBuilder {
         }
     }
 
-    /// Set the unique job identifier, as obtained from [`ActivateJobsResponse`].
+    /// Set the unique job identifier, as obtained from [`Job::key`].
     pub fn with_job_key(self, job_key: i64) -> Self {
         ThrowErrorBuilder {
             job_key: Some(job_key),
@@ -318,7 +318,7 @@ impl UpdateJobRetriesBuilder {
         }
     }
 
-    /// Set the unique job identifier, as obtained from [`ActivateJobsResponse`].
+    /// Set the unique job identifier, as obtained from [`Job::key`].
     pub fn with_job_key(self, job_key: i64) -> Self {
         UpdateJobRetriesBuilder {
             job_key: Some(job_key),

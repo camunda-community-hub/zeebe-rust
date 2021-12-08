@@ -16,13 +16,14 @@ edition = "2021"
 
 [dependencies]
 futures = "0.3"
+oauth2 = { version = "4.1" }
 prost = "0.9"
 serde = "1.0"
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.1", features = ["fs"] }
+tokio = { version = "1.1", features = ["fs"], default_features = false }
 tokio-stream = "0.1"
-tonic = { version = "0.6", features = ["tls", "transport"] }
+tonic = { version = "0.6", features = ["tls", "tls-roots", "transport"] }
 tracing = "0.1"
 tracing-futures = "0.2"
 
