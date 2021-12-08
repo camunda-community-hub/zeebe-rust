@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.4.0](https://github.com/OutThereLabs/zeebe-rust/compare/v0.3.1...v0.4.0)
+
+### Added
+
+-  Add OAuth Support (#28)
+
+### Changed
+
+- Update to zeebe 1.0 protocol (#27)
+
 ## [v0.3.1](https://github.com/OutThereLabs/zeebe-rust/compare/v0.3.0...v0.3.1)
 
 ### Fixed
