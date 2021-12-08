@@ -20,7 +20,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     // Create a zeebe client
-//!     let client = Client::default();
+//!     let client = Client::from_env()?;
 //!
 //!     // Deploy a process
 //!     client
@@ -67,7 +67,7 @@
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = Client::new();
+//! let client = Client::from_env()?;
 //!
 //! // Given an app-specific error
 //! #[derive(Error, Debug)]

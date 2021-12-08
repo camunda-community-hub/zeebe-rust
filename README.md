@@ -27,7 +27,7 @@ use zeebe::{Client, Job};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a zeebe client
-    let client = Client::default();
+    let client = Client::from_env()?;
 
     // Deploy a process
     client
