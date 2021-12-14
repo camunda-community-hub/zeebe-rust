@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.4.1](https://github.com/OutThereLabs/zeebe-rust/compare/v0.4.0...v0.4.1)
+
+### Fixed
+
+- Add oauth request timeouts (#30)
+
 ## [v0.4.0](https://github.com/OutThereLabs/zeebe-rust/compare/v0.3.1...v0.4.0)
 
 ### Added
