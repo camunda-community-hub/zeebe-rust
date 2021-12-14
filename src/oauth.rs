@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::sync::broadcast;
+use tokio::time::timeout;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
 use tonic::Status;
@@ -86,6 +87,7 @@ struct TokenResponseWithExpiration {
 struct TokenProvider {
     oauth2_client: BasicClient,
     audience: Option<String>,
+    request_timeout: Duration,
     cached_token: Mutex<Option<TokenResponseWithExpiration>>,
     init_sender: broadcast::Sender<()>,
 }
@@ -151,9 +153,20 @@ impl TokenProvider {
 
         tracing::trace!(req = ?token_request, "sending request");
 
-        let response = match token_request
-            .request_async(oauth2::reqwest::async_http_client)
-            .await
+        let response = match timeout(
+            self.request_timeout,
+            token_request
+                .request_async(oauth2::reqwest::async_http_client)
+                .map_err(|err| Error::Auth(err.to_string())),
+        )
+        .await
+        .map_err(|_| {
+            Error::Auth(format!(
+                "timed out waiting for oauth token after {} milliseconds",
+                self.request_timeout.as_millis()
+            ))
+        })
+        .and_then(|res| res)
         {
             Ok(response) => response,
             Err(err) => {
@@ -212,6 +225,7 @@ impl AuthInterceptor {
         let token_provider = Arc::new(TokenProvider {
             oauth2_client,
             audience: config.token_audience,
+            request_timeout: config.timeout,
             cached_token: Mutex::new(None),
             init_sender: broadcast::channel(1).0,
         });
