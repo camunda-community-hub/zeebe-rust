@@ -1,6 +1,8 @@
 use futures::TryFutureExt;
 use oauth2::basic::{BasicClient, BasicTokenResponse};
-use oauth2::{AuthUrl, ClientId, ClientSecret, TokenResponse, TokenUrl};
+use oauth2::{
+    AsyncClientCredentialsTokenRequest, AuthUrl, ClientId, ClientSecret, TokenResponse, TokenUrl,
+};
 use std::env;
 use std::fmt;
 use std::sync::Arc;
@@ -9,8 +11,7 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::time::timeout;
 use tonic::metadata::MetadataValue;
-use tonic::service::Interceptor;
-use tonic::Status;
+use tonic::{Interceptor, Status};
 
 use crate::{Error, Result};
 
@@ -256,22 +257,21 @@ impl AuthInterceptor {
     }
 }
 
-impl Interceptor for AuthInterceptor {
-    fn call(
-        &mut self,
-        mut request: tonic::Request<()>,
-    ) -> std::result::Result<tonic::Request<()>, Status> {
-        if let Some(token_provider) = &self.token_provider {
-            let access_token = token_provider
-                .access_token()
-                .map_err(|_| Status::permission_denied("No valid token available"))?;
+impl From<AuthInterceptor> for Interceptor {
+    fn from(auth: AuthInterceptor) -> Interceptor {
+        Interceptor::new(move |mut request| {
+            if let Some(token_provider) = &auth.token_provider {
+                let access_token = token_provider
+                    .access_token()
+                    .map_err(|_| Status::permission_denied("No valid token available"))?;
 
-            let value = MetadataValue::from_str(format!("Bearer {}", access_token).as_str())
-                .map_err(|error| Status::permission_denied(format!("{}", error)))?;
+                let value = MetadataValue::from_str(format!("Bearer {}", access_token).as_str())
+                    .map_err(|error| Status::permission_denied(format!("{}", error)))?;
 
-            request.metadata_mut().insert("authorization", value);
-        }
+                request.metadata_mut().insert("authorization", value);
+            }
 
-        Ok(request)
+            Ok(request)
+        })
     }
 }

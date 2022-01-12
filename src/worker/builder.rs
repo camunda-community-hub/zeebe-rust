@@ -7,7 +7,7 @@ use crate::worker::{
     job_dispatcher, JobPoller, PollMessage,
 };
 use futures::future::LocalBoxFuture;
-use futures::FutureExt;
+use futures::{FutureExt, StreamExt};
 use serde::Serialize;
 use serde_json::json;
 use std::fmt;
@@ -15,10 +15,6 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::{sync::mpsc, time::interval};
-use tokio_stream::{
-    wrappers::{IntervalStream, ReceiverStream},
-    StreamExt,
-};
 use tracing_futures::Instrument;
 
 static DEFAULT_JOB_TIMEOUT: Duration = Duration::from_secs(5 * 60);
@@ -327,8 +323,7 @@ impl JobWorkerBuilder {
 
         let (job_queue, job_queue_rx) = mpsc::channel(self.request.max_jobs_to_activate as usize);
         let (poll_queue, poll_rx) = mpsc::channel(32);
-        let poll_interval =
-            IntervalStream::new(interval(self.poll_interval)).map(|_| PollMessage::FetchJobs);
+        let poll_interval = interval(self.poll_interval).map(|_| PollMessage::FetchJobs);
         let worker_name = self.request.worker.clone();
         let job_poller = JobPoller {
             client: self.client.clone(),
@@ -337,10 +332,7 @@ impl JobWorkerBuilder {
             max_jobs_active: self.request.max_jobs_to_activate as u32,
             job_queue,
             message_sender: poll_queue.clone(),
-            messages: Box::pin(futures::stream::select(
-                ReceiverStream::new(poll_rx),
-                poll_interval,
-            )),
+            messages: Box::pin(futures::stream::select(poll_rx, poll_interval)),
             remaining: 0,
             threshold: (self.request.max_jobs_to_activate as f32 * self.poll_threshold).floor()
                 as u32,

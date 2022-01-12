@@ -17,7 +17,6 @@ use std::fmt::Debug;
 use std::fs;
 use std::rc::Rc;
 use std::time::Duration;
-use tonic::codegen::InterceptedService;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -32,7 +31,7 @@ const DEFAULT_ADDRESS_PORT: &str = "26500";
 /// Client used to communicate with Zeebe.
 #[derive(Clone, Debug)]
 pub struct Client {
-    pub(crate) gateway_client: GatewayClient<InterceptedService<Channel, AuthInterceptor>>,
+    pub(crate) gateway_client: GatewayClient<Channel>,
     pub(crate) auth_interceptor: AuthInterceptor,
     pub(crate) current_job_key: Option<i64>,
     pub(crate) current_job_extensions: Option<Rc<Extensions>>,
@@ -519,15 +518,6 @@ pub struct ClientConfig {
 impl ClientConfig {
     /// Get client config from environment
     pub fn from_env() -> Result<Self> {
-        let tls = if let Ok(ca_path) = env::var(CA_CERTIFICATE_PATH) {
-            let pem = fs::read_to_string(ca_path).map_err(|err| Error::Auth(err.to_string()))?;
-            let cert = Certificate::from_pem(pem);
-
-            Some(ClientTlsConfig::new().ca_certificate(cert))
-        } else {
-            None
-        };
-
         let address = if let Ok(gateway_host) = env::var(HOST) {
             if let Ok(gateway_port) = env::var(PORT) {
                 format!("{}:{}", gateway_host, gateway_port)
@@ -540,6 +530,19 @@ impl ClientConfig {
             gateway_address
         } else {
             format!("{}:{}", DEFAULT_ADDRESS_HOST, DEFAULT_ADDRESS_PORT)
+        };
+
+        let tls = if let Ok(ca_path) = env::var(CA_CERTIFICATE_PATH) {
+            let pem = fs::read_to_string(ca_path).map_err(|err| Error::Auth(err.to_string()))?;
+            let cert = Certificate::from_pem(pem);
+
+            Some(ClientTlsConfig::new().ca_certificate(cert))
+        } else {
+            if address.starts_with("https") {
+                Some(ClientTlsConfig::new())
+            } else {
+                None
+            }
         };
 
         let auth = if OAuthConfig::should_use_env_config() {
