@@ -31,6 +31,7 @@ tracing-futures = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.1", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenv = "0.15"
 
 [build-dependencies]
 tonic-build = "0.6"
