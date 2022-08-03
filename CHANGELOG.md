@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.4.2](https://github.com/OutThereLabs/zeebe-rust/compare/v0.4.1...v0.4.2)
+
+### Fixed
+
+- Error events in `tracing` logs
+
 ## [v0.4.1](https://github.com/OutThereLabs/zeebe-rust/compare/v0.4.0...v0.4.1)
 
 ### Fixed
