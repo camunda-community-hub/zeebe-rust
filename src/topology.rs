@@ -12,7 +12,7 @@ impl TopologyBuilder {
     }
 
     /// Send a topology request to the configured gateway.
-    #[tracing::instrument(skip(self), name = "topology")]
+    #[tracing::instrument(skip(self), name = "topology", err)]
     pub async fn send(mut self) -> Result<TopologyResponse> {
         let req = proto::TopologyRequest {};
         debug!(?req, "sending request");

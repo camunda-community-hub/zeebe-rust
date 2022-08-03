@@ -38,7 +38,7 @@ impl DeployProcessBuilder {
     }
 
     /// Submit the process to the Zeebe brokers.
-    #[tracing::instrument(skip(self), name = "deploy_process")]
+    #[tracing::instrument(skip(self), name = "deploy_process", err)]
     pub async fn send(mut self) -> Result<DeployProcessResponse> {
         // Read process definitions
         trace!(files = ?self.resource_files, "reading files");
@@ -200,7 +200,7 @@ impl CreateProcessInstanceBuilder {
     }
 
     /// Submit this process instance to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), name = "create_process_instance")]
+    #[tracing::instrument(skip(self), name = "create_process_instance", err)]
     pub async fn send(mut self) -> Result<CreateProcessInstanceResponse> {
         if self.process_definition_key.is_none() && self.bpmn_process_id.is_none() {
             return Err(Error::InvalidParameters(
@@ -361,7 +361,7 @@ impl CreateProcessInstanceWithResultBuilder {
     }
 
     /// Submit this process instance to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), name = "create_process_instance_with_result")]
+    #[tracing::instrument(skip(self), name = "create_process_instance_with_result", err)]
     pub async fn send(mut self) -> Result<CreateProcessInstanceWithResultResponse> {
         if self.process_definition_key.is_none() && self.bpmn_process_id.is_none() {
             return Err(Error::InvalidParameters(
@@ -464,7 +464,7 @@ impl CancelProcessInstanceBuilder {
     }
 
     /// Submit this cancel process instance request to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), name = "cancel_process_instance")]
+    #[tracing::instrument(skip(self), name = "cancel_process_instance", err)]
     pub async fn send(mut self) -> Result<CancelProcessInstanceResponse> {
         if self.process_instance_key.is_none() {
             return Err(Error::InvalidParameters(
@@ -563,7 +563,7 @@ impl SetVariablesBuilder {
     }
 
     /// Submit this set variables request to the configured Zeebe brokers.
-    #[tracing::instrument(skip(self), name = "set_variables")]
+    #[tracing::instrument(skip(self), name = "set_variables", err)]
     pub async fn send(mut self) -> Result<SetVariablesResponse> {
         if self.element_instance_key.is_none() {
             return Err(Error::InvalidParameters(
