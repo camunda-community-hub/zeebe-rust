@@ -148,6 +148,12 @@ pub struct CreateProcessInstanceBuilder {
     /// "a": 1, "b": 2 }] would not be a valid argument, as the root of the JSON
     /// document is an array and not an object.
     variables: Option<serde_json::Value>,
+    /// List of start instructions.
+    ///
+    /// If empty (default) the process instance will start at the start event. If
+    /// non-empty the process instance will apply start instructions after it has
+    /// been created
+    start_instructions: Vec<ProcessInstanceCreationStartInstruction>,
 }
 
 impl CreateProcessInstanceBuilder {
@@ -159,6 +165,7 @@ impl CreateProcessInstanceBuilder {
             bpmn_process_id: None,
             version: -1,
             variables: None,
+            start_instructions: Vec::new(),
         }
     }
 
@@ -209,11 +216,16 @@ impl CreateProcessInstanceBuilder {
         }
         let req = proto::CreateProcessInstanceRequest {
             process_definition_key: self.process_definition_key.unwrap_or(0),
-            bpmn_process_id: self.bpmn_process_id.unwrap_or_else(String::new),
+            bpmn_process_id: self.bpmn_process_id.unwrap_or_default(),
             version: self.version,
             variables: self
                 .variables
                 .map_or(String::new(), |vars| vars.to_string()),
+            start_instructions: self
+                .start_instructions
+                .into_iter()
+                .map(Into::into)
+                .collect(),
         };
 
         debug!(?req, "sending request:");
@@ -257,6 +269,55 @@ impl CreateProcessInstanceResponse {
     }
 }
 
+/// Instructions to apply after process has started
+///
+/// future extensions might include:
+/// - different types of start instructions
+/// - ability to set local variables for different flow scopes
+///
+/// for now, however, the start instruction is implicitly a
+/// "startBeforeElement" instruction
+#[derive(Debug)]
+pub struct ProcessInstanceCreationStartInstruction {
+    element_id: String,
+}
+
+impl From<ProcessInstanceCreationStartInstruction>
+    for proto::ProcessInstanceCreationStartInstruction
+{
+    fn from(value: ProcessInstanceCreationStartInstruction) -> Self {
+        proto::ProcessInstanceCreationStartInstruction {
+            element_id: value.element_id,
+        }
+    }
+}
+
+/// Configuration for process instance creation start instructions
+#[derive(Debug)]
+pub struct ProcessInstanceCreationStartInstructionBuilder {
+    element_id: Option<String>,
+}
+
+impl ProcessInstanceCreationStartInstructionBuilder {
+    /// Set the element id of the process creation start instruction
+    pub fn with_element_id(mut self, element_id: String) -> Self {
+        self.element_id = Some(element_id);
+        self
+    }
+
+    /// Create a new process instance creation start instruction with this config.
+    pub fn build(self) -> Result<ProcessInstanceCreationStartInstruction> {
+        match self.element_id {
+            Some(element_id) if !element_id.is_empty() => {
+                Ok(ProcessInstanceCreationStartInstruction { element_id })
+            }
+            _ => Err(Error::InvalidParameters(
+                "`process_definition_key` or `pbmn_process_id` must be set",
+            )),
+        }
+    }
+}
+
 /// Creates and starts an instance of the specified process with result.
 ///
 /// Similar to [`CreateProcessInstanceBuilder`], creates and starts an instance of
@@ -291,6 +352,12 @@ pub struct CreateProcessInstanceWithResultBuilder {
     /// [`CreateProcessInstanceWithResultResponse`]'s variables if empty, all visible
     /// variables in the root scope will be returned.
     fetch_variables: Vec<String>,
+    /// List of start instructions.
+    ///
+    /// If empty (default) the process instance will start at the start event. If
+    /// non-empty the process instance will apply start instructions after it has
+    /// been created
+    start_instructions: Vec<ProcessInstanceCreationStartInstruction>,
 }
 
 impl CreateProcessInstanceWithResultBuilder {
@@ -304,6 +371,7 @@ impl CreateProcessInstanceWithResultBuilder {
             variables: None,
             request_timeout: 0,
             fetch_variables: Vec::new(),
+            start_instructions: Vec::new(),
         }
     }
 
@@ -360,6 +428,15 @@ impl CreateProcessInstanceWithResultBuilder {
         }
     }
 
+    /// Adds a start instruction to this request.
+    pub fn with_start_instruction(
+        mut self,
+        instruction: ProcessInstanceCreationStartInstruction,
+    ) -> Self {
+        self.start_instructions.push(instruction);
+        self
+    }
+
     /// Submit this process instance to the configured Zeebe brokers.
     #[tracing::instrument(skip(self), name = "create_process_instance_with_result", err)]
     pub async fn send(mut self) -> Result<CreateProcessInstanceWithResultResponse> {
@@ -371,11 +448,16 @@ impl CreateProcessInstanceWithResultBuilder {
         let req = proto::CreateProcessInstanceWithResultRequest {
             request: Some(proto::CreateProcessInstanceRequest {
                 process_definition_key: self.process_definition_key.unwrap_or(0),
-                bpmn_process_id: self.bpmn_process_id.unwrap_or_else(String::new),
+                bpmn_process_id: self.bpmn_process_id.unwrap_or_default(),
                 version: self.version,
                 variables: self
                     .variables
                     .map_or(String::new(), |vars| vars.to_string()),
+                start_instructions: self
+                    .start_instructions
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
             }),
             request_timeout: self.request_timeout as i64,
             fetch_variables: self.fetch_variables,

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{client::Client, proto, Error, Result};
 use tracing::{debug, trace};
 
@@ -161,6 +163,8 @@ pub struct FailJobBuilder {
     job_key: Option<i64>,
     retries: Option<u32>,
     error_message: Option<String>,
+    retry_back_off: Option<Duration>,
+    variables: Option<serde_json::Value>,
 }
 
 impl FailJobBuilder {
@@ -171,6 +175,8 @@ impl FailJobBuilder {
             job_key: None,
             retries: None,
             error_message: None,
+            retry_back_off: None,
+            variables: None,
         }
     }
 
@@ -200,6 +206,22 @@ impl FailJobBuilder {
         }
     }
 
+    /// Set the backoff timeout for the next retry.
+    pub fn with_back_off(self, duration: Duration) -> Self {
+        FailJobBuilder {
+            retry_back_off: Some(duration),
+            ..self
+        }
+    }
+
+    /// Set the JSON document representing the variables in the current task scope.
+    pub fn with_variables<T: Into<serde_json::Value>>(self, variables: T) -> Self {
+        Self {
+            variables: Some(variables.into()),
+            ..self
+        }
+    }
+
     /// Submit the fail job request.
     #[tracing::instrument(skip(self), name = "fail_job", err)]
     pub async fn send(mut self) -> Result<FailJobResponse> {
@@ -210,6 +232,8 @@ impl FailJobBuilder {
             job_key: self.job_key.or(self.client.current_job_key).unwrap(),
             retries: self.retries.unwrap_or_default() as i32,
             error_message: self.error_message.unwrap_or_default(),
+            retry_back_off: self.retry_back_off.unwrap_or_default().as_millis() as i64,
+            variables: self.variables.map(|v| v.to_string()).unwrap_or_default(),
         };
 
         debug!(job_key = req.job_key, "failing job:");
@@ -235,6 +259,7 @@ pub struct ThrowErrorBuilder {
     job_key: Option<i64>,
     error_code: Option<String>,
     error_message: Option<String>,
+    variables: Option<serde_json::Value>,
 }
 
 impl ThrowErrorBuilder {
@@ -245,6 +270,7 @@ impl ThrowErrorBuilder {
             job_key: None,
             error_code: None,
             error_message: None,
+            variables: None,
         }
     }
 
@@ -272,6 +298,14 @@ impl ThrowErrorBuilder {
         }
     }
 
+    /// Set the JSON document representing the variables in the current task scope.
+    pub fn with_variables<T: Into<serde_json::Value>>(self, variables: T) -> Self {
+        ThrowErrorBuilder {
+            variables: Some(variables.into()),
+            ..self
+        }
+    }
+
     /// Submit the throw error request.
     #[tracing::instrument(skip(self), name = "throw_error", err)]
     pub async fn send(mut self) -> Result<ThrowErrorResponse> {
@@ -282,6 +316,7 @@ impl ThrowErrorBuilder {
             job_key: self.job_key.or(self.client.current_job_key).unwrap(),
             error_code: self.error_code.unwrap_or_default(),
             error_message: self.error_message.unwrap_or_default(),
+            variables: self.variables.map(|v| v.to_string()).unwrap_or_default(),
         };
 
         debug!(?req, "sending request:");
