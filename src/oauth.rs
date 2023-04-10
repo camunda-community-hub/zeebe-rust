@@ -266,7 +266,7 @@ impl Interceptor for AuthInterceptor {
                 .access_token()
                 .map_err(|_| Status::permission_denied("No valid token available"))?;
 
-            let value = MetadataValue::from_str(format!("Bearer {}", access_token).as_str())
+            let value = MetadataValue::try_from(format!("Bearer {}", access_token).as_str())
                 .map_err(|error| Status::permission_denied(format!("{}", error)))?;
 
             request.metadata_mut().insert("authorization", value);
