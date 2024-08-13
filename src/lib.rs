@@ -120,17 +120,13 @@
     missing_docs,
     rust_2018_idioms,
     bad_style,
-    const_err,
-    dead_code,
     improper_ctypes,
     non_shorthand_field_patterns,
     no_mangle_generic_items,
     overflowing_literals,
     path_statements,
     patterns_in_fns_without_body,
-    private_in_public,
     unconditional_recursion,
-    unused,
     unused_allocation,
     unused_comparisons,
     unused_parens,
@@ -142,12 +138,13 @@ pub(crate) mod error;
 pub(crate) mod job;
 pub(crate) mod oauth;
 pub(crate) mod process;
+pub(crate) mod resources;
 pub(crate) mod topology;
 pub(crate) mod util;
 pub(crate) mod worker;
 
-#[allow(clippy::all)]
-pub(crate) mod proto {
+#[allow(clippy::all, missing_docs)]
+pub mod proto {
     tonic::include_proto!("gateway_protocol");
 }
 

@@ -4,7 +4,7 @@ use crate::{
     worker::{auto_handler::Extensions, builder::JobHandler, PollMessage},
 };
 use futures::StreamExt;
-use std::rc::Rc;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -17,7 +17,7 @@ pub(crate) async fn run(
     worker: String,
     job_extensions: Extensions,
 ) {
-    let per_job_extensions = Rc::new(job_extensions);
+    let per_job_extensions = Arc::new(job_extensions);
 
     ReceiverStream::new(job_queue)
         .for_each_concurrent(concurrency, |job| {
@@ -51,5 +51,5 @@ struct JobTask<'a> {
     poll_queue: &'a mpsc::Sender<PollMessage>,
     handler: &'a JobHandler,
     worker: &'a str,
-    extensions: &'a Rc<Extensions>,
+    extensions: &'a Arc<Extensions>,
 }

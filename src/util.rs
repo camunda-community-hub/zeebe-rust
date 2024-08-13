@@ -10,6 +10,7 @@ pub struct PublishMessageBuilder {
     time_to_live: Option<u64>,
     message_id: Option<String>,
     variables: Option<serde_json::Value>,
+    tenant_id: Option<String>,
 }
 
 impl PublishMessageBuilder {
@@ -22,6 +23,7 @@ impl PublishMessageBuilder {
             time_to_live: None,
             message_id: None,
             variables: None,
+            tenant_id: None,
         }
     }
 
@@ -66,6 +68,14 @@ impl PublishMessageBuilder {
         }
     }
 
+    /// Set the tenant ID of the message.
+    pub fn with_tenant_id<T: Into<String>>(self, tenant_id: T) -> Self {
+        PublishMessageBuilder {
+            tenant_id: Some(tenant_id.into()),
+            ..self
+        }
+    }
+
     /// Submit the publish message request.
     #[tracing::instrument(skip(self), name = "publish_message", err)]
     pub async fn send(mut self) -> Result<PublishMessageResponse> {
@@ -80,6 +90,7 @@ impl PublishMessageBuilder {
             variables: self
                 .variables
                 .map_or(String::new(), |vars| vars.to_string()),
+            tenant_id: self.tenant_id.unwrap_or_default(),
         };
 
         debug!(name = ?req.name, "publishing message:");
@@ -110,6 +121,7 @@ impl PublishMessageResponse {
 pub struct ResolveIncidentBuilder {
     client: Client,
     incident_key: Option<i64>,
+    operation_reference: Option<u64>,
 }
 
 impl ResolveIncidentBuilder {
@@ -118,6 +130,7 @@ impl ResolveIncidentBuilder {
         ResolveIncidentBuilder {
             client,
             incident_key: None,
+            operation_reference: None,
         }
     }
 
@@ -125,6 +138,14 @@ impl ResolveIncidentBuilder {
     pub fn with_incident_key(self, incident_key: i64) -> Self {
         ResolveIncidentBuilder {
             incident_key: Some(incident_key),
+            ..self
+        }
+    }
+
+    /// Set a reference key chosen by the user and will be part of all records resulted from this operation
+    pub fn with_operation_reference(self, operation_reference: u64) -> Self {
+        ResolveIncidentBuilder {
+            operation_reference: Some(operation_reference),
             ..self
         }
     }
@@ -137,6 +158,7 @@ impl ResolveIncidentBuilder {
         }
         let req = proto::ResolveIncidentRequest {
             incident_key: self.incident_key.unwrap(),
+            operation_reference: self.operation_reference,
         };
 
         debug!(?req, "sending request:");

@@ -160,6 +160,8 @@ pub struct FailJobBuilder {
     client: Client,
     job_key: Option<i64>,
     retries: Option<u32>,
+    retry_back_off: Option<i64>,
+    variables: Option<serde_json::Value>,
     error_message: Option<String>,
 }
 
@@ -170,6 +172,8 @@ impl FailJobBuilder {
             client,
             job_key: None,
             retries: None,
+            retry_back_off: None,
+            variables: None,
             error_message: None,
         }
     }
@@ -186,6 +190,28 @@ impl FailJobBuilder {
     pub fn with_retries(self, retries: u32) -> Self {
         FailJobBuilder {
             retries: Some(retries),
+            ..self
+        }
+    }
+
+    /// Set the amount of time in milliseconds to wait before the job is retried.
+    pub fn with_retry_back_off(self, retry_backoff: i64) -> Self {
+        FailJobBuilder {
+            retry_back_off: Some(retry_backoff),
+            ..self
+        }
+    }
+
+    /// Set the JSON document representing the variables in the current task scope.
+    ///
+    /// JSON document that will instantiate the variables at the local scope of the
+    /// job's associated task; it must be a JSON object, as variables will be mapped in a
+    /// key-value fashion. e.g. { "a": 1, "b": 2 } will create two variables, named "a" and
+    /// "b" respectively, with their associated values. [{ "a": 1, "b": 2 }] would not be a
+    /// valid argument, as the root of the JSON document is an array and not an object.
+    pub fn with_variables<T: Into<serde_json::Value>>(self, variables: T) -> Self {
+        FailJobBuilder {
+            variables: Some(variables.into()),
             ..self
         }
     }
@@ -209,6 +235,10 @@ impl FailJobBuilder {
         let req = proto::FailJobRequest {
             job_key: self.job_key.or(self.client.current_job_key).unwrap(),
             retries: self.retries.unwrap_or_default() as i32,
+            retry_back_off: self.retry_back_off.unwrap_or_default(),
+            variables: self
+                .variables
+                .map_or(String::new(), |vars| vars.to_string()),
             error_message: self.error_message.unwrap_or_default(),
         };
 
@@ -235,6 +265,7 @@ pub struct ThrowErrorBuilder {
     job_key: Option<i64>,
     error_code: Option<String>,
     error_message: Option<String>,
+    variables: Option<serde_json::Value>,
 }
 
 impl ThrowErrorBuilder {
@@ -245,6 +276,7 @@ impl ThrowErrorBuilder {
             job_key: None,
             error_code: None,
             error_message: None,
+            variables: None,
         }
     }
 
@@ -272,6 +304,20 @@ impl ThrowErrorBuilder {
         }
     }
 
+    /// Set the JSON document representing the variables in the current task scope.
+    ///
+    /// JSON document that will instantiate the variables at the local scope of the
+    /// error catch event that catches the thrown error; it must be a JSON object, as variables will be mapped in a
+    /// key-value fashion. e.g. { "a": 1, "b": 2 } will create two variables, named "a" and
+    /// "b" respectively, with their associated values. [{ "a": 1, "b": 2 }] would not be a
+    /// valid argument, as the root of the JSON document is an array and not an object.
+    pub fn with_variables<T: Into<serde_json::Value>>(self, variables: T) -> Self {
+        ThrowErrorBuilder {
+            variables: Some(variables.into()),
+            ..self
+        }
+    }
+
     /// Submit the throw error request.
     #[tracing::instrument(skip(self), name = "throw_error", err)]
     pub async fn send(mut self) -> Result<ThrowErrorResponse> {
@@ -282,6 +328,9 @@ impl ThrowErrorBuilder {
             job_key: self.job_key.or(self.client.current_job_key).unwrap(),
             error_code: self.error_code.unwrap_or_default(),
             error_message: self.error_message.unwrap_or_default(),
+            variables: self
+                .variables
+                .map_or(String::new(), |vars| vars.to_string()),
         };
 
         debug!(?req, "sending request:");
@@ -306,6 +355,7 @@ pub struct UpdateJobRetriesBuilder {
     client: Client,
     job_key: Option<i64>,
     retries: Option<u32>,
+    operation_reference: Option<u64>,
 }
 
 impl UpdateJobRetriesBuilder {
@@ -315,6 +365,7 @@ impl UpdateJobRetriesBuilder {
             client,
             job_key: None,
             retries: None,
+            operation_reference: None,
         }
     }
 
@@ -334,6 +385,14 @@ impl UpdateJobRetriesBuilder {
         }
     }
 
+    /// Set a reference key chosen by the user and will be part of all records resulted from this operation
+    pub fn with_operation_reference(self, operation_reference: u64) -> Self {
+        UpdateJobRetriesBuilder {
+            operation_reference: Some(operation_reference),
+            ..self
+        }
+    }
+
     /// Submit the update job retries request.
     #[tracing::instrument(skip(self), name = "update_job_retries", err)]
     pub async fn send(mut self) -> Result<UpdateJobRetriesResponse> {
@@ -347,6 +406,7 @@ impl UpdateJobRetriesBuilder {
         let req = proto::UpdateJobRetriesRequest {
             job_key: self.job_key.or(self.client.current_job_key).unwrap(),
             retries: self.retries.unwrap() as i32,
+            operation_reference: self.operation_reference,
         };
 
         debug!(?req, "sending request:");

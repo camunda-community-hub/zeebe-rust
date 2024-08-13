@@ -86,7 +86,7 @@ impl BrokerInfo {
         self.0
             .partitions
             .iter()
-            .map(|proto| Partition(proto.clone()))
+            .map(|proto| Partition(*proto))
             .collect()
     }
 

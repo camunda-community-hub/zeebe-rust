@@ -1,4 +1,5 @@
 use crate::oauth::AuthInterceptor;
+use crate::resources::{DeleteResourceBuilder, DeployResourceBuilder};
 use crate::{
     error::{Error, Result},
     job::{CompleteJobBuilder, FailJobBuilder, ThrowErrorBuilder, UpdateJobRetriesBuilder},
@@ -15,7 +16,7 @@ use crate::{
 use std::env;
 use std::fmt::Debug;
 use std::fs;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 use tonic::codegen::InterceptedService;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
@@ -35,7 +36,7 @@ pub struct Client {
     pub(crate) gateway_client: GatewayClient<InterceptedService<Channel, AuthInterceptor>>,
     pub(crate) auth_interceptor: AuthInterceptor,
     pub(crate) current_job_key: Option<i64>,
-    pub(crate) current_job_extensions: Option<Rc<Extensions>>,
+    pub(crate) current_job_extensions: Option<Arc<Extensions>>,
 }
 
 impl Default for Client {
@@ -151,6 +152,47 @@ impl Client {
     /// # }
     pub fn deploy_process(&self) -> DeployProcessBuilder {
         DeployProcessBuilder::new(self.clone())
+    }
+
+    /// Deploys a single resource to Zeebe
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// let deployment = client
+    ///     .deploy_resource()
+    ///     .with_resource_name("my-name")
+    ///     .with_content(vec![1, 2, 3])
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    pub fn deploy_resource(&self) -> DeployResourceBuilder {
+        DeployResourceBuilder::new(self.clone())
+    }
+
+    /// Delete a single resource from Zeebe
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = zeebe::Client::new();
+    ///
+    /// let removed = client
+    ///    .delete_resource()
+    ///    .with_resource_key(123)
+    ///    .send()
+    ///    .await?;
+    /// # Ok(())
+    /// # }
+    pub fn delete_resource(&self) -> DeleteResourceBuilder {
+        DeleteResourceBuilder::new(self.clone())
     }
 
     /// Creates and starts an instance of the specified process.

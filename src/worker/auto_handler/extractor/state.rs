@@ -49,7 +49,10 @@ use std::sync::Arc;
 /// ```
 pub struct State<T>(Arc<T>);
 
-impl<T> State<T> {
+impl<T> State<T>
+where
+    T: Send + 'static,
+{
     /// Create new `State` instance.
     pub fn new(state: T) -> State<T> {
         State(Arc::new(state))

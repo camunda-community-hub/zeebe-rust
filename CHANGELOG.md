@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.5.0](https://github.com/fathom-io/zeebe-rust/compare/v0.4.2...v0.5.0)
+
+### Changed
+
+- Client is now Send + Sync
+- Updated to new zeebe protocol
+
 ## [v0.4.2](https://github.com/OutThereLabs/zeebe-rust/compare/v0.4.1...v0.4.2)
 
 ### Fixed
@@ -16,7 +23,7 @@
 
 ### Added
 
--  Add OAuth Support (#28)
+- Add OAuth Support (#28)
 
 ### Changed
 
@@ -48,6 +55,7 @@
 - Switch to extractors for auto handlers #3
 
   To upgrade current auto handlers, wrap parameters in `Data<T>`:
+
   ```diff
   - .with_auto_handler(|client: Client, job_data: MyJobData| ..)
   + .with_auto_handler(|client: Client, job_data: zeebe::Data<MyJobData>| ..)

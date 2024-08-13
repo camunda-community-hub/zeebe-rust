@@ -1,9 +1,6 @@
 # Zeebe Rust Client
 
-[![Build Status](https://github.com/OutThereLabs/zeebe-rust/workflows/CI/badge.svg)](https://github.com/OutThereLabs/zeebe-rust/actions?query=workflow%3ACI)
-[![Crates.io: zeebe](https://img.shields.io/crates/v/zeebe.svg)](https://crates.io/crates/zeebe)
-[![Documentation](https://docs.rs/zeebe/badge.svg)](https://docs.rs/zeebe)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+This is a fork of [https://github.com/camunda-community-hub/zeebe-rust]()
 
 A rust client for defining, orchestrating, and monitoring business processes
 across microservices using [Zeebe].

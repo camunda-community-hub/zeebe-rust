@@ -10,7 +10,7 @@ pub use extractor::{Data, State};
 pub(crate) use handler::HandlerFactory;
 
 #[derive(Default)]
-pub(crate) struct Extensions(HashMap<TypeId, Box<dyn Any>>);
+pub(crate) struct Extensions(HashMap<TypeId, Box<dyn Any + Send + Sync>>);
 
 impl Extensions {
     /// Build new default extensions
@@ -18,7 +18,7 @@ impl Extensions {
         Extensions::default()
     }
 
-    pub(crate) fn insert<T: 'static>(&mut self, data: T) {
+    pub(crate) fn insert<T: Send + Sync + 'static>(&mut self, data: T) {
         self.0.insert(data.type_id(), Box::new(data));
     }
 

@@ -75,9 +75,16 @@ impl JobWorkerBuilder {
                 max_jobs_to_activate: DEFAULT_JOB_WORKER_MAX_JOB_ACTIVE as i32,
                 fetch_variable: Vec::new(),
                 request_timeout: DEFAULT_REQUEST_TIMEOUT.as_millis() as i64,
+                tenant_ids: Vec::new(),
             },
             request_timeout: DEFAULT_REQUEST_TIMEOUT + REQUEST_TIMEOUT_OFFSET,
         }
+    }
+
+    /// Set tenant IDs for which to activate jobs
+    pub fn with_tenant_ids(mut self, tenant_ids: Vec<String>) -> Self {
+        self.request.tenant_ids = tenant_ids;
+        self
     }
 
     /// Set the job type of the worker.
@@ -303,7 +310,7 @@ impl JobWorkerBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_state<T: 'static>(mut self, t: T) -> Self {
+    pub fn with_state<T: Send + Sync + 'static>(mut self, t: T) -> Self {
         self.data.insert(State::new(t));
         self
     }

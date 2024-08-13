@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::cell::Cell;
+use std::sync::RwLock;
 use thiserror::Error;
 use zeebe::{Client, Data, State};
 
@@ -21,7 +21,7 @@ struct MyJobResult {
 
 // Optional worker state that persists across jobs
 struct JobState {
-    total: Cell<u32>,
+    total: RwLock<u32>,
 }
 
 // Job handler with arbitrary number of parameters that can be extracted
@@ -29,10 +29,10 @@ async fn handle_job(
     job_data: Data<MyJobData>,
     job_state: State<JobState>,
 ) -> Result<MyJobResult, MyError> {
-    let current_total = job_state.total.get();
+    let current_total = *job_state.total.read().unwrap();
     let new_total = current_total + job_data.increment;
 
-    job_state.total.set(new_total);
+    *job_state.total.write().unwrap() = new_total;
 
     Ok(MyJobResult { result: new_total })
 }
@@ -43,11 +43,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize the worker state
     let job_state = JobState {
-        total: Cell::new(0),
+        total: RwLock::new(0),
     };
 
     // Run the job
-    let _job = client
+    client
         .job_worker()
         .with_job_type("my-job-type")
         .with_auto_handler(handle_job)

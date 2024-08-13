@@ -148,6 +148,14 @@ pub struct CreateProcessInstanceBuilder {
     /// "a": 1, "b": 2 }] would not be a valid argument, as the root of the JSON
     /// document is an array and not an object.
     variables: Option<serde_json::Value>,
+    /// List of start instructions. If empty (default) the process instance
+    /// will start at the start event. If non-empty the process instance will apply start
+    /// instructions after it has been created
+    start_instructions: Vec<String>,
+    /// the tenant id of the process definition
+    tenant_id: Option<String>,
+    /// a reference key chosen by the user and will be part of all records resulted from this operation
+    operation_reference: Option<u64>,
 }
 
 impl CreateProcessInstanceBuilder {
@@ -159,6 +167,9 @@ impl CreateProcessInstanceBuilder {
             bpmn_process_id: None,
             version: -1,
             variables: None,
+            start_instructions: Vec::new(),
+            tenant_id: None,
+            operation_reference: None,
         }
     }
 
@@ -199,6 +210,30 @@ impl CreateProcessInstanceBuilder {
         }
     }
 
+    /// Set start instructions for this process instance.
+    pub fn with_start_instructions(self, start_instructions: Vec<String>) -> Self {
+        CreateProcessInstanceBuilder {
+            start_instructions,
+            ..self
+        }
+    }
+
+    /// Set tenant ID for this process instance.
+    pub fn with_tenant_id<T: Into<String>>(self, tenant_id: T) -> Self {
+        CreateProcessInstanceBuilder {
+            tenant_id: Some(tenant_id.into()),
+            ..self
+        }
+    }
+
+    /// Set operation reference for this process instance.
+    pub fn with_operation_reference(self, operation_reference: u64) -> Self {
+        CreateProcessInstanceBuilder {
+            operation_reference: Some(operation_reference),
+            ..self
+        }
+    }
+
     /// Submit this process instance to the configured Zeebe brokers.
     #[tracing::instrument(skip(self), name = "create_process_instance", err)]
     pub async fn send(mut self) -> Result<CreateProcessInstanceResponse> {
@@ -209,11 +244,18 @@ impl CreateProcessInstanceBuilder {
         }
         let req = proto::CreateProcessInstanceRequest {
             process_definition_key: self.process_definition_key.unwrap_or(0),
-            bpmn_process_id: self.bpmn_process_id.unwrap_or_else(String::new),
+            bpmn_process_id: self.bpmn_process_id.unwrap_or_default(),
             version: self.version,
             variables: self
                 .variables
                 .map_or(String::new(), |vars| vars.to_string()),
+            start_instructions: self
+                .start_instructions
+                .into_iter()
+                .map(|var| proto::ProcessInstanceCreationStartInstruction { element_id: var })
+                .collect(),
+            tenant_id: self.tenant_id.unwrap_or_default(),
+            operation_reference: self.operation_reference,
         };
 
         debug!(?req, "sending request:");
@@ -291,6 +333,14 @@ pub struct CreateProcessInstanceWithResultBuilder {
     /// [`CreateProcessInstanceWithResultResponse`]'s variables if empty, all visible
     /// variables in the root scope will be returned.
     fetch_variables: Vec<String>,
+    /// List of start instructions. If empty (default) the process instance
+    /// will start at the start event. If non-empty the process instance will apply start
+    /// instructions after it has been created
+    start_instructions: Vec<String>,
+    /// the tenant id of the process definition
+    tenant_id: Option<String>,
+    /// a reference key chosen by the user and will be part of all records resulted from this operation
+    operation_reference: Option<u64>,
 }
 
 impl CreateProcessInstanceWithResultBuilder {
@@ -304,6 +354,9 @@ impl CreateProcessInstanceWithResultBuilder {
             variables: None,
             request_timeout: 0,
             fetch_variables: Vec::new(),
+            start_instructions: Vec::new(),
+            tenant_id: None,
+            operation_reference: None,
         }
     }
 
@@ -360,6 +413,30 @@ impl CreateProcessInstanceWithResultBuilder {
         }
     }
 
+    /// Set start instructions for this process instance.
+    pub fn with_start_instructions(self, start_instructions: Vec<String>) -> Self {
+        CreateProcessInstanceWithResultBuilder {
+            start_instructions,
+            ..self
+        }
+    }
+
+    /// Set tenant ID for this process instance.
+    pub fn with_tenant_id<T: Into<String>>(self, tenant_id: T) -> Self {
+        CreateProcessInstanceWithResultBuilder {
+            tenant_id: Some(tenant_id.into()),
+            ..self
+        }
+    }
+
+    /// Set operation reference for this process instance.
+    pub fn with_operation_reference(self, operation_reference: u64) -> Self {
+        CreateProcessInstanceWithResultBuilder {
+            operation_reference: Some(operation_reference),
+            ..self
+        }
+    }
+
     /// Submit this process instance to the configured Zeebe brokers.
     #[tracing::instrument(skip(self), name = "create_process_instance_with_result", err)]
     pub async fn send(mut self) -> Result<CreateProcessInstanceWithResultResponse> {
@@ -371,11 +448,18 @@ impl CreateProcessInstanceWithResultBuilder {
         let req = proto::CreateProcessInstanceWithResultRequest {
             request: Some(proto::CreateProcessInstanceRequest {
                 process_definition_key: self.process_definition_key.unwrap_or(0),
-                bpmn_process_id: self.bpmn_process_id.unwrap_or_else(String::new),
+                bpmn_process_id: self.bpmn_process_id.unwrap_or_default(),
                 version: self.version,
                 variables: self
                     .variables
                     .map_or(String::new(), |vars| vars.to_string()),
+                start_instructions: self
+                    .start_instructions
+                    .into_iter()
+                    .map(|var| proto::ProcessInstanceCreationStartInstruction { element_id: var })
+                    .collect(),
+                tenant_id: self.tenant_id.unwrap_or_default(),
+                operation_reference: self.operation_reference,
             }),
             request_timeout: self.request_timeout as i64,
             fetch_variables: self.fetch_variables,
@@ -444,6 +528,7 @@ pub struct CancelProcessInstanceBuilder {
     /// The unique key identifying the process instance (e.g. returned from a
     /// process in the [`CreateProcessInstanceResponse`] struct).
     process_instance_key: Option<i64>,
+    operation_reference: Option<u64>,
 }
 
 impl CancelProcessInstanceBuilder {
@@ -452,6 +537,7 @@ impl CancelProcessInstanceBuilder {
         CancelProcessInstanceBuilder {
             client,
             process_instance_key: None,
+            operation_reference: None,
         }
     }
 
@@ -459,6 +545,14 @@ impl CancelProcessInstanceBuilder {
     pub fn with_process_instance_key(self, key: i64) -> Self {
         CancelProcessInstanceBuilder {
             process_instance_key: Some(key),
+            ..self
+        }
+    }
+
+    /// Set operation reference
+    pub fn with_operation_reference(self, operation_reference: u64) -> Self {
+        CancelProcessInstanceBuilder {
+            operation_reference: Some(operation_reference),
             ..self
         }
     }
@@ -473,6 +567,7 @@ impl CancelProcessInstanceBuilder {
         }
         let req = proto::CancelProcessInstanceRequest {
             process_instance_key: self.process_instance_key.unwrap(),
+            operation_reference: self.operation_reference,
         };
 
         debug!(?req, "sending request:");
@@ -498,6 +593,7 @@ pub struct SetVariablesBuilder {
     element_instance_key: Option<i64>,
     variables: Option<serde_json::Value>,
     local: bool,
+    operation_reference: Option<u64>,
 }
 
 impl SetVariablesBuilder {
@@ -508,6 +604,7 @@ impl SetVariablesBuilder {
             element_instance_key: None,
             variables: None,
             local: false,
+            operation_reference: None,
         }
     }
 
@@ -562,6 +659,14 @@ impl SetVariablesBuilder {
         SetVariablesBuilder { local, ..self }
     }
 
+    /// Set a reference key chosen by the user and will be part of all records resulted from this operation
+    pub fn with_operation_reference(self, operation_reference: u64) -> Self {
+        SetVariablesBuilder {
+            operation_reference: Some(operation_reference),
+            ..self
+        }
+    }
+
     /// Submit this set variables request to the configured Zeebe brokers.
     #[tracing::instrument(skip(self), name = "set_variables", err)]
     pub async fn send(mut self) -> Result<SetVariablesResponse> {
@@ -576,6 +681,7 @@ impl SetVariablesBuilder {
                 .variables
                 .map_or(String::new(), |vars| vars.to_string()),
             local: self.local,
+            operation_reference: self.operation_reference,
         };
 
         debug!(?req, "sending request:");

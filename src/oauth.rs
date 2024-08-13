@@ -3,6 +3,7 @@ use oauth2::basic::{BasicClient, BasicTokenResponse};
 use oauth2::{AuthUrl, ClientId, ClientSecret, TokenResponse, TokenUrl};
 use std::env;
 use std::fmt;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;

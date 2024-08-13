@@ -14,8 +14,8 @@ use zeebe::Client;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv::dotenv().ok();
-    
+    dotenvy::dotenv().ok();
+
     tracing_subscriber::fmt()
         .with_env_filter("zeebe=trace")
         .init();
