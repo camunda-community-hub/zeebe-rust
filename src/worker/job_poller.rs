@@ -38,7 +38,7 @@ impl fmt::Debug for JobPoller {
 #[derive(Debug)]
 pub(crate) enum PollMessage {
     FetchJobs,
-    JobsArrived(u32),
+    JobArrived,
     FetchJobsComplete,
     JobFinished,
 }
@@ -76,25 +76,23 @@ impl JobPoller {
                     })
                     .await
                 {
-                    let mut total_jobs = 0;
                     while let Some(Ok(batch)) = stream.next().await {
-                        total_jobs += batch.jobs.len() as u32;
                         for job in batch.jobs {
+                            let _ = poll_queue
+                                .send(PollMessage::JobArrived)
+                                .inspect_err(|err| {
+                                    tracing::error!(?worker, ?err, "poll queue send failed");
+                                })
+                                .await;
                             let _ = job_queue
                                 .send(Job::new(job))
                                 .inspect_err(|err| {
                                     tracing::error!(?worker, ?err, "job queue send failed");
                                 })
                                 .await;
+                            tracing::trace!(?worker, "received new job");
                         }
                     }
-                    tracing::trace!(?worker, "received {} new job(s)", total_jobs);
-                    let _ = poll_queue
-                        .send(PollMessage::JobsArrived(total_jobs))
-                        .inspect_err(|err| {
-                            tracing::error!(?worker, ?err, "poll queue send failed");
-                        })
-                        .await;
                 }
             })
             .then(|_| async move {
@@ -116,8 +114,8 @@ impl Future for JobPoller {
         loop {
             match futures::ready!(self.messages.poll_next_unpin(cx)) {
                 // new work arrived
-                Some(PollMessage::JobsArrived(new_job_count)) => {
-                    self.remaining = self.remaining.saturating_add(new_job_count);
+                Some(PollMessage::JobArrived) => {
+                    self.remaining = self.remaining.saturating_add(1);
                 }
                 // a job was finished by a worker
                 Some(PollMessage::JobFinished) => {
